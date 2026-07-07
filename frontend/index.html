@@ -1171,24 +1171,23 @@
     };
   }
 
-  // Register Service Worker for offline access
+  // Desactivar y limpiar Service Worker y cachés anteriores
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => {
-          console.log('Service Worker registrado:', reg.scope);
-          // Auto-actualizar y recargar la página cuando se instale una nueva versión del SW
-          reg.addEventListener('updatefound', () => {
-            const installingWorker = reg.installing;
-            installingWorker.addEventListener('statechange', () => {
-              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('Nueva versión del Service Worker instalada. Recargando página...');
-                window.location.reload();
-              }
-            });
-          });
-        })
-        .catch(err => console.error('Error al registrar Service Worker:', err));
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      for (const registration of registrations) {
+        registration.unregister().then(() => {
+          console.log('Service Worker desactivado con éxito.');
+        });
+      }
+    });
+  }
+  if ('caches' in window) {
+    caches.keys().then(keys => {
+      keys.forEach(key => {
+        caches.delete(key).then(() => {
+          console.log('Caché eliminada:', key);
+        });
+      });
     });
   }
 
@@ -3434,8 +3433,8 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
     };
   }
 
-  function updateOnlineStatus(forceOfflineFlag = false) {
-    const isOffline = !navigator.onLine || forceOfflineFlag;
+  function updateOnlineStatus() {
+    const isOffline = !navigator.onLine;
     const badge = document.getElementById('offline-badge');
     if (badge) {
       if (isOffline) {
@@ -3446,8 +3445,8 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
     }
   }
 
-  window.addEventListener('online', () => updateOnlineStatus(false));
-  window.addEventListener('offline', () => updateOnlineStatus(true));
+  window.addEventListener('online', () => updateOnlineStatus());
+  window.addEventListener('offline', () => updateOnlineStatus());
 
   function saveStateToCache() {
     const user = localStorage.getItem('username') || 'anonymous';
@@ -3515,8 +3514,8 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
       }
     }
 
-    // Si cargamos de la caché o el navegador está offline, mostrar el badge offline
-    updateOnlineStatus(loadedFromCache);
+    // Mostrar badge si no hay conexión a internet física
+    updateOnlineStatus();
   }
 
   function downloadExamPdf(topic, correctCount, total, questions, answers, difficulty) {
