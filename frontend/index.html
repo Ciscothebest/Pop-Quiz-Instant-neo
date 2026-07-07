@@ -1623,19 +1623,6 @@ content = fullText;
         });
         if (!res.ok) throw new Error('Error al registrar archivo en base de datos');
 
-        // Cachear en LocalStorage para uso sin conexión
-        const fileObjForCache = {
-          id: fileRecord.id,
-          name: fileRecord.name,
-          content: fileRecord.content,
-          size_label: fileRecord.sizeLabel,
-          original_data: fileRecord.originalData,
-          media_type: fileRecord.mediaType,
-          pdfImages: fileRecord.pdfImages,
-          groupId: fileRecord.groupId
-        };
-        localStorage.setItem(`offline_file_${fileRecord.id}`, JSON.stringify(fileObjForCache));
-
         // Add to local state
         fileRecord.checked = autoCheck;
         state.availableFiles.push(fileRecord);
@@ -1817,22 +1804,9 @@ content = fullText;
   async function showFilePreview(fileId) {
     try {
       showScreen('loading');
-      let file = null;
-      try {
-        const res = await fetch(`/api/files/${fileId}`);
-        if (!res.ok) throw new Error('No se pudo recuperar el archivo de la base de datos.');
-        file = await res.json();
-        // Guardar en caché local para lectura offline
-        localStorage.setItem(`offline_file_${fileId}`, JSON.stringify(file));
-      } catch (fetchErr) {
-        console.warn('Error al obtener archivo del servidor, buscando en caché local...', fetchErr);
-        const cached = localStorage.getItem(`offline_file_${fileId}`);
-        if (cached) {
-          file = JSON.parse(cached);
-        } else {
-          throw new Error('Este archivo no está almacenado localmente para verse sin conexión.');
-        }
-      }
+      const res = await fetch(`/api/files/${fileId}`);
+      if (!res.ok) throw new Error('No se pudo recuperar el archivo de la base de datos.');
+      const file = await res.json();
       
       state.activePreviewFileId = file.id;
       els.previewFileName.textContent = file.name;
@@ -1893,21 +1867,9 @@ content = fullText;
   els.btnDownloadFile.addEventListener('click', async () => {
     if (!state.activePreviewFileId) return;
     try {
-      let file = null;
-      try {
-        const res = await fetch(`/api/files/${state.activePreviewFileId}`);
-        if (!res.ok) throw new Error('Error al descargar.');
-        file = await res.json();
-        localStorage.setItem(`offline_file_${state.activePreviewFileId}`, JSON.stringify(file));
-      } catch (fetchErr) {
-        console.warn('Error al obtener archivo del servidor para descargar, buscando en caché local...', fetchErr);
-        const cached = localStorage.getItem(`offline_file_${state.activePreviewFileId}`);
-        if (cached) {
-          file = JSON.parse(cached);
-        } else {
-          throw new Error('El archivo no está en la caché local para descargarse sin conexión.');
-        }
-      }
+      const res = await fetch(`/api/files/${state.activePreviewFileId}`);
+      if (!res.ok) throw new Error('Error al descargar.');
+      const file = await res.json();
       downloadBase64File(file.original_data, file.name, file.media_type);
     } catch(e) {
       showCustomAlert('Error', 'Error al descargar el archivo: ' + e.message);
@@ -3500,18 +3462,12 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
       if (filesRes.ok) {
         state.availableFiles = await filesRes.json();
         state.availableFiles.forEach(f => f.checked = false);
-        localStorage.setItem(`offline_files_${user}`, JSON.stringify(state.availableFiles));
       } else {
         throw new Error('files response not ok');
       }
     } catch (e) {
-      console.warn('Error cargando archivos de SQLite, intentando caché:', e);
-      const cached = localStorage.getItem(`offline_files_${user}`);
-      if (cached) {
-        state.availableFiles = JSON.parse(cached);
-        state.availableFiles.forEach(f => f.checked = false);
-        loadedFromCache = true;
-      }
+      console.warn('Error cargando archivos del servidor:', e);
+      state.availableFiles = [];
     }
 
     // Mostrar badge si no hay conexión a internet física
