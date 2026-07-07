@@ -12,9 +12,18 @@ const pbkdf2 = promisify(crypto.pbkdf2);
 const randomBytes = promisify(crypto.randomBytes);
 
 // Crear la carpeta de uploads para desacoplar el almacenamiento de SQLite
-const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+let uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn("Advertencia: No se pudo crear o acceder a UPLOADS_DIR (" + uploadsDir + "):", e.message);
+  console.warn("Usando ruta local de fallback para uploads.");
+  uploadsDir = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
 }
 
 // Criptografía: PBKDF2 Hashing para contraseñas seguras (asíncronas para no bloquear el bucle de eventos)
@@ -39,10 +48,15 @@ if (cluster.isPrimary || cluster.isMaster) {
   console.log(`Proceso principal ${process.pid} corriendo.`);
 
   // 1. Inicializar base de datos y correr migraciones e índices en el proceso master
-  const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
-  const dbDir = path.dirname(dbPath);
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+  let dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
+  try {
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+  } catch (e) {
+    console.warn("Advertencia: No se pudo crear el directorio para la base de datos (" + dbPath + "):", e.message);
+    dbPath = path.join(__dirname, 'examenes.db');
   }
   const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
@@ -149,10 +163,15 @@ if (cluster.isPrimary || cluster.isMaster) {
   const PORT = process.env.PORT || 3000;
 
 // Initialize SQLite database
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
-const dbDir = path.dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+let dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
+try {
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn("Advertencia: No se pudo crear el directorio para la base de datos en worker (" + dbPath + "):", e.message);
+  dbPath = path.join(__dirname, 'examenes.db');
 }
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
