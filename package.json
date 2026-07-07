@@ -1,0 +1,9 @@
+{
+  "name": "pop-quiz-instant-neo-root",
+  "version": "1.0.0",
+  "description": "Root package.json for easy deployment on Render",
+  "scripts": {
+    "build": "cd backend && npm install",
+    "start": "cd backend && node server.js"
+  }
+}
