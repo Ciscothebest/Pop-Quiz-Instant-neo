@@ -2,7 +2,7 @@ process.env.UV_THREADPOOL_SIZE = 128;
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const crypto = require('crypto');
 const fs = require('fs');
 const cluster = require('cluster');
@@ -10,6 +10,14 @@ const { promisify } = require('util');
 
 const pbkdf2 = promisify(crypto.pbkdf2);
 const randomBytes = promisify(crypto.randomBytes);
+
+// Configurar pool de conexión a PostgreSQL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost') && !process.env.DATABASE_URL.includes('127.0.0.1')
+    ? { rejectUnauthorized: false }
+    : false
+});
 
 // Crear la carpeta de uploads para desacoplar el almacenamiento de SQLite
 let uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
@@ -48,110 +56,85 @@ if (cluster.isPrimary || cluster.isMaster) {
   console.log(`Proceso principal ${process.pid} corriendo.`);
 
   // 1. Inicializar base de datos y correr migraciones e índices en el proceso master
-  let dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
-  try {
-    const dbDir = path.dirname(dbPath);
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
-  } catch (e) {
-    console.warn("Advertencia: No se pudo crear el directorio para la base de datos (" + dbPath + "):", e.message);
-    dbPath = path.join(__dirname, 'examenes.db');
-  }
-  const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-      console.error('Error al abrir la base de datos SQLite en master:', err);
-      process.exit(1);
-    }
-  });
+  const initDb = async () => {
+    try {
+      console.log('Inicializando base de datos PostgreSQL...');
+      
+      // Crear tabla groups
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS groups (
+          id VARCHAR(255) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          active INTEGER NOT NULL DEFAULT 1,
+          username VARCHAR(255)
+        )
+      `);
 
-  db.serialize(() => {
-    db.run('PRAGMA journal_mode = WAL;');
+      // Crear tabla exams
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS exams (
+          id VARCHAR(255) PRIMARY KEY,
+          topic VARCHAR(255) NOT NULL,
+          date VARCHAR(255) NOT NULL,
+          questions TEXT NOT NULL,
+          answers TEXT NOT NULL,
+          correct_count INTEGER NOT NULL,
+          total_questions INTEGER NOT NULL,
+          passed INTEGER NOT NULL,
+          group_id VARCHAR(255),
+          active INTEGER NOT NULL DEFAULT 1,
+          username VARCHAR(255),
+          difficulty VARCHAR(50) DEFAULT 'normal',
+          FOREIGN KEY(group_id) REFERENCES groups(id) ON DELETE SET NULL
+        )
+      `);
 
-    db.run(`
-      CREATE TABLE IF NOT EXISTS groups (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        active INTEGER NOT NULL DEFAULT 1,
-        username TEXT
-      )
-    `, (err) => {
-      if (!err) {
-        db.run(`ALTER TABLE groups ADD COLUMN active INTEGER NOT NULL DEFAULT 1`, (alterErr) => {});
-        db.run(`ALTER TABLE groups ADD COLUMN username TEXT`, (alterErr) => {});
-      }
-    });
+      // Crear tabla files
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS files (
+          id VARCHAR(255) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          content TEXT NOT NULL,
+          size_label VARCHAR(100) NOT NULL,
+          original_data TEXT NOT NULL DEFAULT '',
+          media_type VARCHAR(100) NOT NULL DEFAULT 'text/plain',
+          pdf_images TEXT NOT NULL DEFAULT '[]',
+          active INTEGER NOT NULL DEFAULT 1,
+          username VARCHAR(255),
+          group_id VARCHAR(255)
+        )
+      `);
 
-    db.run(`
-      CREATE TABLE IF NOT EXISTS exams (
-        id TEXT PRIMARY KEY,
-        topic TEXT NOT NULL,
-        date TEXT NOT NULL,
-        questions TEXT NOT NULL,
-        answers TEXT NOT NULL,
-        correct_count INTEGER NOT NULL,
-        total_questions INTEGER NOT NULL,
-        passed INTEGER NOT NULL,
-        group_id TEXT,
-        active INTEGER NOT NULL DEFAULT 1,
-        username TEXT,
-        FOREIGN KEY(group_id) REFERENCES groups(id) ON DELETE SET NULL
-      )
-    `, (err) => {
-      if (!err) {
-        db.run(`ALTER TABLE exams ADD COLUMN active INTEGER NOT NULL DEFAULT 1`, (alterErr) => {});
-        db.run(`ALTER TABLE exams ADD COLUMN username TEXT`, (alterErr) => {});
-        db.run(`ALTER TABLE exams ADD COLUMN difficulty TEXT`, (alterErr) => {});
-      }
-    });
+      // Crear tabla users
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          username VARCHAR(255) PRIMARY KEY,
+          password TEXT NOT NULL
+        )
+      `);
 
-    db.run(`
-      CREATE TABLE IF NOT EXISTS files (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        content TEXT NOT NULL,
-        size_label TEXT NOT NULL,
-        original_data TEXT NOT NULL DEFAULT '',
-        media_type TEXT NOT NULL DEFAULT 'text/plain',
-        pdf_images TEXT NOT NULL DEFAULT '[]',
-        active INTEGER NOT NULL DEFAULT 1,
-        username TEXT,
-        group_id TEXT
-      )
-    `, (err) => {
-      if (!err) {
-        db.run(`ALTER TABLE files ADD COLUMN original_data TEXT NOT NULL DEFAULT ''`, (alterErr) => {});
-        db.run(`ALTER TABLE files ADD COLUMN media_type TEXT NOT NULL DEFAULT 'text/plain'`, (alterErr) => {});
-        db.run(`ALTER TABLE files ADD COLUMN pdf_images TEXT NOT NULL DEFAULT '[]'`, (alterErr) => {});
-        db.run(`ALTER TABLE files ADD COLUMN active INTEGER NOT NULL DEFAULT 1`, (alterErr) => {});
-        db.run(`ALTER TABLE files ADD COLUMN username TEXT`, (alterErr) => {});
-        db.run(`ALTER TABLE files ADD COLUMN group_id TEXT`, (alterErr) => {});
-      }
-    });
-
-    db.run(`
-      CREATE TABLE IF NOT EXISTS users (
-        username TEXT PRIMARY KEY,
-        password TEXT NOT NULL
-      )
-    `);
-
-    db.run(`CREATE INDEX IF NOT EXISTS idx_groups_username_active ON groups(username, active);`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_exams_username_active_date ON exams(username, active, date DESC);`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_files_username_active ON files(username, active);`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_exams_group_id ON exams(group_id);`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_files_group_id ON files(group_id);`);
-
-    db.close((closeErr) => {
-      if (closeErr) console.error('Error al cerrar DB en master:', closeErr);
+      // Crear índices
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_groups_username_active ON groups(username, active);`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_exams_username_active_date ON exams(username, active, date DESC);`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_files_username_active ON files(username, active);`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_exams_group_id ON exams(group_id);`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_files_group_id ON files(group_id);`);
+      
+      console.log('Base de datos PostgreSQL inicializada con éxito.');
+      
       const numCPUs = require('os').cpus().length;
       const workersCount = parseInt(process.env.WEB_CONCURRENCY) || Math.min(numCPUs, 4);
       console.log(`Master: Iniciando ${workersCount} procesos trabajadores...`);
       for (let i = 0; i < workersCount; i++) {
         cluster.fork();
       }
-    });
-  });
+    } catch (err) {
+      console.error('Error al inicializar la base de datos PostgreSQL en master:', err);
+      process.exit(1);
+    }
+  };
+
+  initDb();
 
   cluster.on('exit', (worker, code, signal) => {
     console.log(`Proceso trabajador ${worker.process.pid} se detuvo. Iniciando uno nuevo...`);
@@ -162,59 +145,32 @@ if (cluster.isPrimary || cluster.isMaster) {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
-// Initialize SQLite database
-let dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
-try {
-  const dbDir = path.dirname(dbPath);
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-  }
-} catch (e) {
-  console.warn("Advertencia: No se pudo crear el directorio para la base de datos en worker (" + dbPath + "):", e.message);
-  dbPath = path.join(__dirname, 'examenes.db');
+// Helper to translate '?' placeholders (SQLite) to '$1, $2...' placeholders (PostgreSQL)
+function translateQuery(queryStr) {
+  let index = 1;
+  return queryStr.replace(/\?/g, () => `$${index++}`);
 }
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error(`Error al abrir la base de datos SQLite en worker ${process.pid}:`, err);
-  } else {
-    // Optimizar SQLite para concurrencia masiva en workers
-    db.serialize(() => {
-      db.run('PRAGMA journal_mode = WAL;');
-      db.run('PRAGMA busy_timeout = 10000;'); // 10 segundos de timeout para aguantar picos
-      db.run('PRAGMA synchronous = NORMAL;');
-      db.run('PRAGMA cache_size = -64000;'); // 64MB de caché
-      db.run('PRAGMA temp_store = MEMORY;'); // Tablas temporales en RAM
-      db.run('PRAGMA mmap_size = 268435456;'); // Memory-mapped I/O (256MB)
-    });
-  }
-});
 
-// Database promise helpers
-const dbRun = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(query, params, function(err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+// Database promise helpers adapted for PostgreSQL
+const dbRun = async (queryStr, params = []) => {
+  const sql = translateQuery(queryStr);
+  const res = await pool.query(sql, params);
+  return {
+    changes: res.rowCount,
+    lastID: null
+  };
 };
 
-const dbAll = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+const dbAll = async (queryStr, params = []) => {
+  const sql = translateQuery(queryStr);
+  const res = await pool.query(sql, params);
+  return res.rows;
 };
 
-const dbGet = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(query, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+const dbGet = async (queryStr, params = []) => {
+  const sql = translateQuery(queryStr);
+  const res = await pool.query(sql, params);
+  return res.rows[0] || null;
 };
 
 // Enable CORS for cross-origin requests (e.g. Netlify frontend to Render backend)
