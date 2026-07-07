@@ -40,6 +40,10 @@ if (cluster.isPrimary || cluster.isMaster) {
 
   // 1. Inicializar base de datos y correr migraciones e índices en el proceso master
   const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
   const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
       console.error('Error al abrir la base de datos SQLite en master:', err);
@@ -127,7 +131,7 @@ if (cluster.isPrimary || cluster.isMaster) {
     db.close((closeErr) => {
       if (closeErr) console.error('Error al cerrar DB en master:', closeErr);
       const numCPUs = require('os').cpus().length;
-      const workersCount = Math.min(numCPUs, 4);
+      const workersCount = parseInt(process.env.WEB_CONCURRENCY) || Math.min(numCPUs, 4);
       console.log(`Master: Iniciando ${workersCount} procesos trabajadores...`);
       for (let i = 0; i < workersCount; i++) {
         cluster.fork();
@@ -146,6 +150,10 @@ if (cluster.isPrimary || cluster.isMaster) {
 
 // Initialize SQLite database
 const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error(`Error al abrir la base de datos SQLite en worker ${process.pid}:`, err);
