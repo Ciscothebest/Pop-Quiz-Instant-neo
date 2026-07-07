@@ -1,0 +1,3978 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pop Quiz Instantáneo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Courier+Prime:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- PDF.js from Cloudflare CDN for browser-side text extraction -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<!-- Office files extraction libraries (Mammoth.js, SheetJS, JSZip) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- html2pdf.js for exporting exams to PDF client-side -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --chalk-green: #2b4735;
+    --chalk-green-dark: #203526;
+    --chalk-white: #f2efe9;
+    --chalk-yellow: #e8c468;
+    --pen-red: #b33a3a;
+    --pen-red-dark: #8f2c2c;
+    --paper: #ede6d6;
+    --paper-line: #d8cdb3;
+    --ink: #26241f;
+    --ink-soft: #5a5648;
+    --radius: 10px;
+  }
+ 
+  *{ box-sizing: border-box; }
+ 
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(ellipse at top, #3a5c46 0%, var(--chalk-green) 45%, var(--chalk-green-dark) 100%);
+    font-family:'Inter', sans-serif;
+    color: var(--chalk-white);
+    padding: 32px 16px 64px;
+  }
+ 
+  /* chalk dust texture overlay */
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    opacity:.05;
+    background-image:
+      radial-gradient(circle at 20% 30%, #fff 0, transparent 1px),
+      radial-gradient(circle at 70% 60%, #fff 0, transparent 1px),
+      radial-gradient(circle at 40% 80%, #fff 0, transparent 1px),
+      radial-gradient(circle at 90% 20%, #fff 0, transparent 1px);
+    background-size: 140px 140px;
+  }
+ 
+  .wrap{ max-width: 760px; margin: 0 auto; position:relative; }
+ 
+  header.top{ text-align:center; margin-bottom: 28px; }
+  h1.title{
+    font-family:'Caveat', cursive;
+    font-weight:700;
+    font-size: 3.4rem;
+    margin: 0 0 4px;
+    letter-spacing: .5px;
+    color: var(--chalk-white);
+    text-shadow: 0 2px 0 rgba(0,0,0,.15);
+  }
+  .title-underline{ width: 260px; height: 14px; margin: -6px auto 10px; }
+  .subtitle{
+    font-size: .95rem;
+    color: #cdd9cd;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+ 
+  .card{
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: var(--radius);
+    box-shadow: 0 18px 40px rgba(0,0,0,.35), 0 2px 0 rgba(255,255,255,.05) inset;
+    padding: 32px;
+    position: relative;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 33px, var(--paper-line) 34px
+    );
+  }
+  .card::before{
+    content:"";
+    position:absolute; left: 46px; top:0; bottom:0; width:2px;
+    background: rgba(179,58,58,.25);
+  }
+  .card-inner{ padding-left: 24px; }
+ 
+  label{
+    display:block;
+    font-weight:600;
+    font-size: .82rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--ink-soft);
+    margin: 18px 0 6px;
+  }
+  label.first{ margin-top:0; }
+ 
+  input[type="text"], input[type="number"]{
+    width:100%;
+    font-family:'Courier Prime', monospace;
+    font-size: 1.05rem;
+    padding: 10px 12px;
+    border: none;
+    border-bottom: 2px dashed var(--ink-soft);
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+  }
+  input[type="text"]:focus, input[type="number"]:focus{
+    border-bottom-color: var(--pen-red);
+  }
+ 
+  .row-2{ display:grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+ 
+  .hint{ font-size:.78rem; color: var(--ink-soft); margin-top:6px; font-style: italic; }
+ 
+  .file-drop{
+    border: 2px dashed var(--ink-soft);
+    border-radius: 8px;
+    padding: 18px 14px;
+    text-align:center;
+    cursor:pointer;
+    background: rgba(255,255,255,.25);
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .file-drop:hover, .file-drop.dragover{ border-color: var(--pen-red); background: rgba(179,58,58,.06); }
+  .file-drop input[type="file"]{ display:none; }
+  .file-drop-label{ font-family:'Inter',sans-serif; font-size:.88rem; color: var(--ink-soft); }
+  .file-drop-label b{ color: var(--ink); }
+ 
+  .file-list{ margin-top: 12px; display:flex; flex-direction:column; gap:8px; }
+  .file-chip{
+    display:flex; align-items:center; gap:10px;
+    background:#fff;
+    border: 1px solid var(--paper-line);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family:'Courier Prime', monospace;
+    font-size:.82rem;
+    color: var(--ink);
+    transform: rotate(-0.4deg);
+  }
+  .file-chip:nth-child(even){ transform: rotate(0.4deg); }
+  .file-chip .clip{ flex-shrink:0; width:16px; height:16px; color: var(--ink-soft); }
+  .file-chip .fname{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-chip .fsize{ color: var(--ink-soft); font-size:.75rem; flex-shrink:0; }
+  .file-chip .fremove{
+    flex-shrink:0; background:none; border:none; color: var(--pen-red);
+    font-size:1rem; font-weight:700; cursor:pointer; padding: 0 4px; border-radius: 4px;
+  }
+  .file-chip .fremove:hover{ background: rgba(179,58,58,.12); }
+ 
+  button{
+    font-family:'Inter', sans-serif;
+    cursor:pointer;
+    border:none;
+    border-radius: 8px;
+    font-weight:600;
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  button:active{ transform: translateY(1px); }
+  button:focus-visible{ outline: 3px solid var(--chalk-yellow); outline-offset:2px; }
+ 
+  .btn-primary{
+    background: var(--pen-red);
+    color: #fff;
+    padding: 14px 22px;
+    font-size: 1rem;
+    width:100%;
+    margin-top: 26px;
+    box-shadow: 0 6px 0 var(--pen-red-dark);
+  }
+  .btn-primary:hover{ background:#c24444; }
+  .btn-primary:disabled{ background:#b0a897; box-shadow:0 6px 0 #8c8571; cursor:not-allowed; }
+ 
+  .btn-secondary{
+    background: transparent;
+    border: 2px solid var(--ink-soft);
+    color: var(--ink);
+    padding: 10px 18px;
+    font-size: .9rem;
+  }
+  .btn-secondary:hover{ border-color: var(--pen-red); color: var(--pen-red); }
+ 
+  .error-box{
+    margin-top:16px;
+    background: #f6dede;
+    border: 1px solid var(--pen-red);
+    color: var(--pen-red-dark);
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size:.88rem;
+  }
+ 
+  .difficulty-container {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+    margin-bottom: 18px;
+  }
+  .difficulty-btn {
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid var(--paper-line);
+    color: var(--ink-soft);
+    padding: 10px 4px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-align: center;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transform: rotate(-0.5deg);
+  }
+  .difficulty-btn:nth-child(even) {
+    transform: rotate(0.5deg);
+  }
+  .difficulty-btn:hover {
+    background: rgba(255, 255, 255, 0.75);
+    color: var(--ink);
+    border-color: var(--ink-soft);
+  }
+  .difficulty-btn.active {
+    background: var(--pen-red);
+    color: #fff;
+    border-color: var(--pen-red);
+    font-weight: 600;
+    box-shadow: 0 4px 8px rgba(179,58,58,0.2);
+  }
+  .difficulty-btn:active {
+    transform: scale(0.97);
+  }
+ 
+  /* Loading */
+  .loading-wrap{ text-align:center; padding: 40px 10px; }
+  .pencil{
+    width: 90px; height:90px; margin: 0 auto 18px;
+    animation: spin 1.4s linear infinite;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+  .loading-msg{ font-family:'Caveat', cursive; font-size:1.6rem; color: var(--ink); }
+ 
+  @media (prefers-reduced-motion: reduce){
+    .pencil{ animation:none; }
+  }
+ 
+  /* Exam screen */
+  .exam-header{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom: 18px; flex-wrap: wrap; gap:10px;
+  }
+  .progress-label{ font-family:'Courier Prime', monospace; font-size:.85rem; color: var(--ink-soft); }
+  .progress-bar-track{
+    height:6px; background:#d8cdb3; border-radius:4px; overflow:hidden; margin-top:6px; width:200px;
+  }
+  .progress-bar-fill{ height:100%; background: var(--pen-red); transition: width .3s ease; }
+ 
+  .timer-clock{
+    display:flex; align-items:center; gap:8px;
+    font-family:'Courier Prime', monospace;
+    font-size:1.3rem; font-weight:700;
+    color: var(--ink);
+    border: 2px solid var(--ink-soft);
+    border-radius: 30px;
+    padding: 6px 16px;
+  }
+  .timer-clock.warning{ color: var(--pen-red); border-color: var(--pen-red); animation: pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.55;} }
+ 
+  .question-text{
+    font-family:'Courier Prime', monospace;
+    font-size: 1.15rem;
+    line-height:1.55;
+    margin: 6px 0 22px;
+    color: var(--ink);
+  }
+  .question-number-tag{
+    display:inline-block; font-family:'Caveat',cursive; font-size:1.3rem;
+    color: var(--pen-red); margin-right:6px;
+  }
+ 
+  .options{ display:flex; flex-direction:column; gap:12px; }
+  .option{
+    display:flex; align-items:center; gap:14px;
+    padding: 12px 14px;
+    border: 1px solid var(--paper-line);
+    border-radius: 8px;
+    background: rgba(255,255,255,.35);
+    cursor:pointer;
+    font-family:'Courier Prime', monospace;
+    font-size: .98rem;
+    color: var(--ink);
+  }
+  .option:hover{ background: rgba(255,255,255,.6); }
+  .bubble{
+    flex-shrink:0;
+    width: 30px; height:30px; border-radius:50%;
+    border: 2px solid var(--ink-soft);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-family:'Inter',sans-serif; font-size:.8rem;
+    color: var(--ink-soft);
+    background:#fff;
+  }
+  .option.selected{ border-color: var(--pen-red); background: rgba(179,58,58,.08); }
+  .option.selected .bubble{
+    background: var(--pen-red); border-color: var(--pen-red); color:#fff;
+  }
+ 
+  .nav-row{ display:flex; justify-content:space-between; margin-top:26px; gap:10px; }
+ 
+  /* Results */
+  .stamp{
+    font-family:'Caveat', cursive;
+    font-weight:700;
+    font-size: 2.6rem;
+    color: var(--pen-red);
+    border: 5px solid var(--pen-red);
+    border-radius: 14px;
+    display:inline-block;
+    padding: 6px 26px;
+    transform: rotate(-6deg);
+    animation: stampIn .35s ease-out;
+    margin-bottom: 4px;
+  }
+  @keyframes stampIn{
+    0%{ transform: rotate(-6deg) scale(2.4); opacity:0; }
+    100%{ transform: rotate(-6deg) scale(1); opacity:1; }
+  }
+  .score-row{ text-align:center; margin-bottom: 20px; }
+  .score-number{ font-family:'Courier Prime',monospace; font-size:1rem; color:var(--ink-soft); margin-top:10px; }
+ 
+  .review-item{
+    border-top: 1px dashed var(--paper-line);
+    padding: 16px 0;
+  }
+  .review-q{ font-family:'Courier Prime',monospace; color: var(--ink); margin-bottom:8px; }
+  .review-answer{ font-size:.9rem; margin: 3px 0; font-family:'Inter',sans-serif; }
+  .review-answer.correct{ color:#2f6b3a; }
+  .review-answer.incorrect{ color: var(--pen-red); text-decoration: line-through; }
+  .review-explain{ font-size:.85rem; color: var(--ink-soft); font-style: italic; margin-top:6px; }
+  .mark{ font-weight:800; margin-right:6px; }
+ 
+  .results-actions{ display:flex; gap:12px; margin-top: 24px; flex-wrap:wrap; }
+  .results-actions button {
+    margin-top: 0 !important;
+    width: auto !important;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 18px !important;
+    font-size: 0.9rem !important;
+    box-shadow: none !important;
+    border-radius: 8px;
+    vertical-align: middle;
+    font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .results-actions .btn-primary {
+    background: var(--pen-red) !important;
+    border: 2px solid var(--pen-red) !important;
+    color: #fff !important;
+  }
+  .results-actions .btn-primary:hover {
+    background: #c24444 !important;
+    border-color: #c24444 !important;
+  }
+  .results-actions .btn-secondary {
+    background: #fdfcf9;
+    border: 2px solid var(--paper-line);
+    color: var(--ink);
+  }
+  .results-actions .btn-secondary:hover {
+    background: #f5f2e9;
+    border-color: var(--pen-red);
+    color: var(--pen-red);
+  }
+ 
+  .save-group-row{
+    display:flex; align-items:center; gap:10px; margin-top:22px;
+    padding-top:16px; border-top: 1px dashed var(--paper-line);
+    flex-wrap:wrap;
+  }
+  .inline-label{
+    font-size:.82rem; font-weight:600; text-transform:uppercase; letter-spacing:.04em;
+    color: var(--ink-soft); margin:0;
+  }
+  select{
+    font-family:'Inter', sans-serif;
+    font-size:.88rem;
+    padding: 7px 32px 7px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--paper-line);
+    background: var(--paper) !important;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%235c6660' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 10px center !important;
+    background-size: 14px 10px !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    color: var(--ink);
+    cursor:pointer;
+  }
+ 
+  .btn-delete-exam:hover, .btn-delete-file:hover {
+    background-color: rgba(179, 58, 58, 0.1) !important;
+  }
+ 
+  .hidden{ display:none !important; }
+ 
+  /* Group Cards */
+  .group-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 16px;
+    margin: 8px 0 24px;
+  }
+  .group-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: #fff;
+    border: 1px solid var(--paper-line);
+    border-radius: 8px;
+    padding: 16px;
+    cursor: pointer;
+    min-height: 110px;
+    position: relative;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    text-align: left;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .group-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    border-color: var(--pen-red);
+  }
+  .group-card.active {
+    border: 2px solid var(--pen-red);
+    background: rgba(179,58,58,.04);
+    box-shadow: 0 4px 10px rgba(179,58,58,0.1);
+  }
+  .group-card:active {
+    background: #fff !important;
+    border-color: var(--pen-red) !important;
+  }
+  .group-card.active:active {
+    background: rgba(179,58,58,.04) !important;
+    border-color: var(--pen-red) !important;
+  }
+
+  .group-card-icon {
+    font-size: 1.4rem;
+    margin-bottom: 8px;
+  }
+  .group-card-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--ink);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.3;
+  }
+  .group-card-count {
+    font-family: 'Courier Prime', monospace;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-top: auto;
+  }
+  .group-card-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity .15s ease;
+  }
+  .group-card:hover .group-card-actions {
+    opacity: 1;
+  }
+  .group-card-action-btn {
+    background: rgba(255,255,255,0.9);
+    border: 1px solid var(--paper-line);
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: var(--ink-soft);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: all 0.1s ease;
+  }
+  .group-card-action-btn:hover {
+    color: #fff;
+  }
+  .group-card-action-btn.edit:hover {
+    background: var(--chalk-yellow);
+    border-color: var(--chalk-yellow);
+    color: var(--ink);
+  }
+  .group-card-action-btn.delete:hover {
+    background: var(--pen-red);
+    border-color: var(--pen-red);
+  }
+  .group-card-add {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--ink-soft);
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    min-height: 110px;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'Caveat', cursive;
+    font-size: 1.3rem;
+    font-weight: 700;
+    transition: border-color .15s ease, color .15s ease, background-color .15s ease;
+  }
+  .group-card-add:hover {
+    border-color: var(--pen-red);
+    color: var(--pen-red);
+    background-color: rgba(179,58,58,.04);
+  }
+  .group-card-add-icon {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+  }
+ 
+  .hi-group-tag{
+    font-size:.72rem; color: var(--ink-soft); background:#f0ead9; border-radius:10px;
+    padding:1px 8px; display:inline-block; margin-top:3px;
+  }
+  .hi-diff-tag{
+    font-size:.72rem; color: var(--ink-soft); background:#e6dfcd; border-radius:10px;
+    padding:1px 8px; display:inline-block; margin-top:3px; margin-left: 6px;
+  }
+  .hi-group-select{ flex-shrink:0; font-size:.78rem; padding:5px 8px; }
+ 
+  /* History */
+  .btn-chalk{
+    background:transparent;
+    border:2px dashed var(--chalk-white);
+    color: var(--chalk-white);
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-family:'Caveat', cursive;
+    font-weight:700;
+    font-size: 1.15rem;
+    cursor:pointer;
+    margin-top: 14px;
+  }
+  .btn-chalk:hover{ border-color: var(--chalk-yellow); color: var(--chalk-yellow); }
+ 
+  .history-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:28px; }
+  .history-header h2{ font-family:'Caveat',cursive; font-size:2rem; margin:0; color:var(--ink); }
+ 
+  .history-empty{ text-align:center; padding: 30px 10px; color: var(--ink-soft); font-style: italic; }
+ 
+  .history-list{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .history-item{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    background:#fff;
+    border: 1px solid var(--paper-line);
+    border-left: 4px solid var(--ink-soft);
+    border-radius: 6px;
+    padding: 12px 14px;
+    cursor:pointer;
+    transition: transform .1s ease, box-shadow .1s ease;
+  }
+  .history-item:hover{ transform: translateX(2px); box-shadow: 0 3px 10px rgba(0,0,0,.08); }
+  .history-item.pass{ border-left-color: #2f6b3a; }
+  .history-item.fail{ border-left-color: var(--pen-red); }
+  .history-item .hi-main{ flex:1; min-width:0; }
+  .history-item .hi-topic{ font-family:'Courier Prime',monospace; font-weight:700; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .history-item .hi-date{ font-size:.76rem; color: var(--ink-soft); margin-top:2px; }
+  .history-item .hi-badge{
+    flex-shrink:0; font-family:'Inter',sans-serif; font-weight:700; font-size:.85rem;
+    padding: 5px 12px; border-radius: 14px; color:#fff;
+  }
+  .history-item.pass .hi-badge{ background:#2f6b3a; }
+  .history-item.fail .hi-badge{ background: var(--pen-red); }
+  .history-item .hi-arrow{ flex-shrink:0; color: var(--ink-soft); font-size:1.2rem; }
+ 
+  .history-clear{
+    display:block; margin: 20px auto 0; background:none; border:none;
+    color: var(--pen-red); font-size:.8rem; text-decoration: underline; cursor:pointer;
+  }
+ 
+  .detail-topic{ font-family:'Courier Prime',monospace; font-size:.85rem; color: var(--ink-soft); text-align:center; margin-top:-8px; margin-bottom:10px; }
+  
+  /* Header button normalization */
+  .header-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .header-actions button {
+    margin-top: 0 !important;
+    width: auto !important;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 18px !important;
+    font-size: 0.9rem !important;
+    box-shadow: none !important;
+    border-radius: 8px;
+    vertical-align: middle;
+    font-weight: 600;
+    
+    background: #fdfcf9 !important;
+    border: 2px solid var(--paper-line) !important;
+    color: var(--ink) !important;
+    transition: all 0.15s ease;
+  }
+  .header-actions button:hover {
+    background: #f5f2e9 !important;
+    border-color: var(--pen-red) !important;
+    color: var(--pen-red) !important;
+  }
+ 
+  /* Library Search Dropdown */
+  .lib-search-dropdown {
+    position: absolute;
+    top: 48px;
+    left: 0;
+    right: 0;
+    background: var(--paper); /* Warm paper cream background */
+    border: 2px solid var(--paper-line);
+    border-radius: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+    padding: 8px;
+  }
+  .lib-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: var(--paper); /* Match application paper background */
+    border: 1px solid var(--paper-line);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'Courier Prime', monospace;
+    font-size: 0.82rem;
+    color: var(--ink);
+    transition: all 0.15s ease;
+  }
+  .lib-dropdown-item:last-child {
+    margin-bottom: 0;
+  }
+  .lib-dropdown-item:hover {
+    background-color: #f5f2e9;
+    border-color: var(--pen-red);
+  }
+  .lib-dropdown-item input[type="checkbox"] {
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--pen-red);
+  }
+  .selected-file-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--paper); /* Match application paper background */
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--paper-line);
+    font-family: 'Courier Prime', monospace;
+    font-size: 0.82rem;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .selected-file-item:last-child {
+    margin-bottom: 0;
+  }
+  .selected-file-item input[type="checkbox"] {
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--pen-red);
+  }
+
+  /* Modal */
+  .modal-overlay{
+    position: fixed; inset:0;
+    background: rgba(15, 20, 15, .55);
+    display:flex; align-items:center; justify-content:center;
+    padding: 20px;
+    z-index: 100;
+  }
+  .modal-box{
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 10px;
+    padding: 26px 26px 22px;
+    width: 100%;
+    max-width: 360px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.4);
+    animation: modalPop .18s ease-out;
+    border-top: 5px solid var(--pen-red);
+  }
+  @keyframes modalPop{
+    0%{ transform: scale(.9); opacity:0; }
+    100%{ transform: scale(1); opacity:1; }
+  }
+  .modal-box h3{
+    font-family:'Caveat', cursive;
+    font-size: 1.8rem;
+    margin: 0 0 14px;
+    color: var(--ink);
+  }
+  .modal-box input[type="text"]{
+    margin-top: 4px;
+    border: none;
+    border-bottom: 2px dashed var(--ink-soft);
+  }
+  .modal-box input[type="text"]:focus{ border-bottom-color: var(--pen-red); }
+  .modal-actions{
+    display:flex; justify-content:flex-end; gap:10px; margin-top: 22px;
+  }
+ 
+  footer.note{
+    text-align:center; font-size:.72rem; color:#a9b8ab; margin-top:20px;
+  }
+ 
+  input[type="password"], .secure-input {
+    -webkit-text-security: disc !important;
+    font-family:'Courier Prime', monospace;
+    font-size:1.05rem;
+    padding: 8px 4px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px dashed var(--ink-soft);
+    color: var(--ink);
+    outline: none;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+  input[type="password"]:focus, .secure-input:focus {
+    border-bottom-color: var(--pen-red);
+  }
+
+  /* Auth Screen Styling */
+  .auth-form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 10px;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .auth-toggle-link {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .auth-toggle-link span {
+    color: var(--pen-red);
+    text-decoration: underline;
+    font-weight: 600;
+  }
+  .auth-btn-row {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .user-header-info {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    font-family: 'Courier Prime', monospace;
+    margin-bottom: 24px;
+    border-bottom: 1px dashed var(--paper-line);
+    padding-bottom: 12px;
+  }
+  .btn-logout {
+    background: none;
+    border: none;
+    color: var(--pen-red);
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0;
+    font-size: 0.85rem;
+  }
+
+  @media (max-width:560px){
+    .row-2{ grid-template-columns: 1fr; }
+    h1.title{ font-size:2.5rem; }
+    .card{ padding: 22px; }
+    .card-inner{ padding-left: 0; }
+    .card::before{ display:none; }
+    .timer-clock{ font-size:1.05rem; padding:5px 12px; }
+  }
+
+  .support-fab {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: var(--chalk-green-dark);
+    border: 2px solid var(--chalk-yellow);
+    color: var(--chalk-white);
+    font-family: 'Caveat', cursive, sans-serif;
+    font-size: 1.6rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 9999;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+  }
+  .support-fab:hover {
+    transform: scale(1.1);
+    background-color: #263e2e;
+  }
+  .support-fab:active {
+    transform: scale(0.95);
+  }
+</style>
+</head>
+<body>
+<button class="support-fab" id="btnSupport" title="Ayuda y Soporte">?</button>
+<div class="wrap">
+ 
+  <!-- AUTH SCREEN -->
+  <section id="screen-auth" class="card">
+    <div class="card-inner">
+      <h2 id="authTitle" style="text-align: center; font-family:'Caveat', cursive; font-size: 2.6rem; margin: 0 0 10px;">Iniciar sesión</h2>
+      <p id="authSubtitle" style="text-align: center; color: var(--ink-soft); font-size: 0.9rem; margin-top:-8px; margin-bottom: 20px;">Ingresa tus credenciales para ingresar a la aplicación.</p>
+      
+      <div class="auth-form-container">
+        <div>
+          <label class="first" for="authUsername">Nombre de usuario</label>
+          <input type="text" id="authUsername" placeholder="Ej: Yanette" style="width: 100%;">
+        </div>
+        <div>
+          <label for="authPassword" style="margin-top: 10px;">Contraseña</label>
+          <input type="text" id="authPassword" class="secure-input" placeholder="••••••••" style="width: 100%;">
+        </div>
+        
+        <div id="authErrorBox" class="error-box hidden" style="margin-top: 10px;"></div>
+        
+        <div class="auth-btn-row">
+          <button class="btn-primary" id="btnSubmitAuth" style="margin-top: 0; width: 100%;">Iniciar sesión</button>
+        </div>
+        
+        <div class="auth-toggle-link" id="btnToggleAuthMode">
+          ¿No tienes una cuenta? <span id="toggleActionText">Regístrate aquí</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OFFLINE INDICATOR BADGE -->
+  <div id="offline-badge" class="hidden" style="position: fixed; top: 15px; right: 15px; background: #2f3531; color: #fdf6e3; padding: 8px 16px; border: 2px dashed #e8c468; border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.85rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 2000;">
+    🖍️ Modo sin conexión (Datos en caché)
+  </div>
+
+  <header class="top">
+    <h1 class="title">Pop Quiz Instantáneo</h1>
+    <svg class="title-underline" viewBox="0 0 260 14" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 8 Q 40 2, 80 8 T 160 7 T 256 8" stroke="#e8c468" stroke-width="4" fill="none" stroke-linecap="round"/>
+    </svg>
+    <p class="subtitle">Pon a prueba tus conocimientos antes del examen</p>
+  </header>
+ 
+  <!-- CONFIG SCREEN -->
+  <section id="screen-config" class="card hidden">
+    <div class="card-inner">
+      <button class="btn-secondary" id="btnBackToHomeFromConfig" style="margin-bottom: 24px;">← Inicio</button>
+
+      <label class="first" for="topic">Tema del examen</label>
+      <input type="text" id="topic" placeholder="Ej: Revolución Francesa, Python básico, Sistema circulatorio...">
+      <p class="hint">La IA busca información sobre este tema antes de redactar las preguntas.</p>
+ 
+      <label>Seleccionar archivos de la biblioteca para este examen</label>
+      <div class="search-dropdown-container" style="position: relative; margin-bottom: 12px;">
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="libSearchInput" placeholder="Buscar archivos en la biblioteca..." style="flex: 1; margin: 0;">
+          <button type="button" id="btnToggleLibDropdown" style="margin: 0; padding: 0 14px; height: 43px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--paper-line); background: rgba(255,255,255,.65); color: var(--ink-soft); cursor: pointer; transition: all 0.15s ease;">▼</button>
+        </div>
+        <div id="libSearchDropdown" class="lib-search-dropdown hidden"></div>
+      </div>
+
+      <label style="margin-top: 14px; margin-bottom: 6px;">Archivos seleccionados para el examen:</label>
+      <div id="selectedFilesList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;"></div>
+
+      <label for="fileInput">Agregar nuevos archivos a la biblioteca</label>
+      <div class="file-drop" id="fileDrop">
+        <input type="file" id="fileInput" multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.xls,.xlsx,.pptx">
+        <span class="file-drop-label"><b>Haz clic para subir</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
+      </div>
+      <p class="hint">Si subes archivos, se guardarán en tu biblioteca y se seleccionarán automáticamente para este examen.</p>
+ 
+      <div class="row-2" style="margin-top: 18px;">
+        <div>
+          <label for="numQuestions">Número de preguntas</label>
+          <input type="number" id="numQuestions" min="3" max="60" value="10">
+        </div>
+        <div>
+          <label for="timerMinutes">Duración (minutos)</label>
+          <input type="number" id="timerMinutes" min="1" value="10">
+        </div>
+      </div>
+ 
+      <label style="margin-top: 18px;">Nivel de dificultad</label>
+      <div class="difficulty-container">
+        <div class="difficulty-btn" data-value="easy">🌱 Fácil</div>
+        <div class="difficulty-btn active" data-value="normal">🎯 Normal</div>
+        <div class="difficulty-btn" data-value="hard">🔥 Difícil</div>
+        <div class="difficulty-btn" data-value="extra-hard">💀 Extra Difícil</div>
+      </div>
+ 
+      <button class="btn-primary" id="btnGenerate">Generar examen</button>
+      <div id="errorBox" class="error-box hidden"></div>
+    </div>
+  </section>
+ 
+  <!-- LOADING SCREEN -->
+  <section id="screen-loading" class="card hidden">
+    <div class="loading-wrap">
+      <svg class="pencil" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <g transform="translate(50,50)">
+          <polygon points="-8,-40 8,-40 8,20 0,35 -8,20" fill="#e8c468" stroke="#26241f" stroke-width="2"/>
+          <polygon points="-8,20 8,20 0,35" fill="#c98a4b" stroke="#26241f" stroke-width="2"/>
+          <rect x="-8" y="-48" width="16" height="10" fill="#b33a3a" stroke="#26241f" stroke-width="2"/>
+        </g>
+      </svg>
+      <p class="loading-msg" id="loadingMsg">Preparando el examen…</p>
+    </div>
+  </section>
+ 
+  <!-- EXAM SCREEN -->
+  <section id="screen-exam" class="card hidden">
+    <div class="card-inner">
+      <div class="exam-header">
+        <div>
+          <div class="progress-label" id="progressLabel">Pregunta 1 de 10</div>
+          <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+        </div>
+        <div class="timer-clock" id="timerClock">⏱ 10:00</div>
+      </div>
+ 
+      <div class="question-text" id="questionText"></div>
+      <div class="options" id="optionsList" role="radiogroup"></div>
+ 
+      <div class="nav-row">
+        <button class="btn-secondary" id="btnPrev">← Anterior</button>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-secondary" id="btnNext">Siguiente →</button>
+          <button class="btn-primary" id="btnFinish" style="margin-top:0; width:auto;">Terminar examen</button>
+        </div>
+      </div>
+    </div>
+  </section>
+ 
+  <!-- RESULTS SCREEN -->
+  <section id="screen-results" class="card hidden">
+    <div class="card-inner">
+      <div class="score-row">
+        <div class="stamp" id="stampText">APROBADO</div>
+        <div class="score-number" id="scoreNumber">8 / 10 correctas</div>
+      </div>
+      <div id="reviewList"></div>
+      <div class="save-group-row">
+        <label for="resultGroupSelect" class="inline-label">Guardar en grupo</label>
+        <select id="resultGroupSelect"></select>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" id="btnNewExam" style="margin-top:0; width:auto;">Nuevo examen</button>
+        <button class="btn-secondary" id="btnGoHistoryFromResults" style="margin-top:0; width:auto;">Ir al inicio</button>
+      </div>
+    </div>
+  </section>
+ 
+  <!-- HOME SCREEN (grupos + historial) -->
+  <section id="screen-history" class="card hidden">
+    <div class="card-inner">
+      <div class="user-header-info">
+        <span>Usuario: <strong id="currentUserDisplay">Yanette</strong></span>
+        <button class="btn-logout" id="btnLogout">Cerrar sesión</button>
+      </div>
+      <div class="history-header">
+        <h2>🏠 Inicio</h2>
+        <div class="header-actions">
+          <button class="btn-secondary" id="btnGoToLibrary">📂 Biblioteca</button>
+          <button class="btn-secondary" id="btnCreateNewGroup">+ Nuevo grupo</button>
+          <button class="btn-primary" id="btnGoToConfig">+ Nuevo examen</button>
+        </div>
+      </div>
+      <div class="group-cards-grid" id="groupCardsContainer"></div>
+    </div>
+  </section>
+  
+  <!-- GROUP EXAMS SCREEN -->
+  <section id="screen-group-exams" class="card hidden">
+    <div class="card-inner">
+      <div class="history-header" style="margin-bottom: 20px;">
+        <h2 id="groupExamsTitle" style="font-family:'Caveat', cursive; font-size:2.2rem; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 320px;">Grupo</h2>
+        <div class="header-actions">
+          <button class="btn-secondary" id="btnGoToLibraryFromGroup">📂 Biblioteca</button>
+          <button class="btn-primary" id="btnGoToConfigFromGroup">+ Nuevo examen</button>
+          <button class="btn-secondary" id="btnBackFromGroupExams">← Volver</button>
+        </div>
+      </div>
+      <div id="groupExamsStats" style="font-size: 0.92rem; color: var(--ink-soft); font-family: 'Inter', sans-serif; margin-bottom: 20px; border-bottom: 1px dashed var(--paper-line); padding-bottom: 10px;" class="hidden"></div>
+      <div id="historyEmpty" class="history-empty hidden">Aún no hay exámenes en este grupo.</div>
+      <div class="history-list" id="historyList"></div>
+      <button class="history-clear" id="btnClearHistory">Borrar historial</button>
+    </div>
+  </section>
+ 
+  <!-- LIBRARY SCREEN -->
+  <section id="screen-library" class="card hidden">
+    <div class="card-inner">
+      <div class="history-header" style="margin-bottom: 20px;">
+        <h2>📂 Biblioteca de Archivos</h2>
+        <button class="btn-secondary" id="btnBackToHomeFromLibrary" style="margin-top:0; width:auto;">← Volver</button>
+      </div>
+      
+      <label for="libFileInput">Subir archivos a la biblioteca</label>
+      <div class="file-drop" id="libFileDrop" style="margin-bottom: 20px;">
+        <input type="file" id="libFileInput" multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.xls,.xlsx,.pptx">
+        <span class="file-drop-label"><b>Haz clic para subir</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
+      </div>
+      
+      <label for="librarySearchInput" style="margin-top: 20px; margin-bottom: 6px;">Buscar en mis archivos</label>
+      <input type="text" id="librarySearchInput" placeholder="Escribe el nombre de un archivo..." style="margin-bottom: 20px;">
+      
+      <div id="libLibraryEmpty" class="history-empty hidden">No hay archivos en la biblioteca. Sube un archivo arriba para comenzar.</div>
+      <div class="history-list" id="libLibraryList"></div>
+      <button class="history-clear hidden" id="btnClearLibrary" style="margin-top: 24px;">Eliminar todos los archivos</button>
+    </div>
+  </section>
+
+  <!-- FILE PREVIEW SCREEN -->
+  <section id="screen-file-preview" class="card hidden">
+    <div class="card-inner">
+      <div class="history-header">
+        <h2 id="previewFileName" style="font-family:'Caveat', cursive; font-size:2rem; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 400px;">Vista previa</h2>
+        <button class="btn-secondary" id="btnBackToLibraryFromPreview" style="margin-top:0; width:auto;">← Volver</button>
+      </div>
+      
+      <div id="previewContainer" style="background: #fff; border: 1px solid var(--paper-line); border-radius: 8px; padding: 0; margin: 20px 0; height: 500px; overflow: hidden; color: var(--ink);">
+        <!-- Vista previa original dinámica (iframe para PDFs / texto formateado) -->
+      </div>
+      
+      <div class="results-actions" style="display:flex; gap:12px; margin-top:20px;">
+        <button class="btn-primary" id="btnDownloadFile" style="margin-top:0; width:auto;">📥 Descargar Original</button>
+        <button class="btn-secondary" id="btnDeleteFileFromPreview" style="margin-top:0; width:auto; border-color: var(--pen-red); color: var(--pen-red);">🗑 Eliminar de la Biblioteca</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- HISTORY DETAIL SCREEN -->
+  <section id="screen-history-detail" class="card hidden">
+    <div class="card-inner">
+      <div class="history-header">
+        <h2>Detalle del examen</h2>
+        <button class="btn-secondary" id="btnBackFromDetail" style="margin-top:0; width:auto;">← Volver</button>
+      </div>
+      <div class="detail-topic" id="detailTopic">Tema</div>
+      <div class="score-row">
+        <div class="stamp" id="detailStamp">APROBADO</div>
+        <div class="score-number" id="detailScore">8 / 10 correctas</div>
+      </div>
+      <div class="save-group-row" style="margin-bottom: 20px; border-bottom: 1px dashed var(--paper-line); padding-bottom: 16px; border-top: none; padding-top: 0;">
+        <label for="detailGroupSelect" class="inline-label">Grupo:</label>
+        <select id="detailGroupSelect"></select>
+      </div>
+      <div id="detailReviewList"></div>
+    </div>
+  </section>
+ 
+</div>
+ 
+<!-- GROUP MODAL -->
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle">
+    <h3 id="groupModalTitle">Crear grupo</h3>
+    <label for="groupModalInput" class="inline-label">Nombre del grupo</label>
+    <input type="text" id="groupModalInput" placeholder="Ej: Matemáticas, Historia, Repaso final...">
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btnModalCancel">Cancelar</button>
+      <button class="btn-primary" id="btnModalSave" style="margin-top:0; width:auto;">Guardar grupo</button>
+    </div>
+  </div>
+</div>
+<!-- ALERT MODAL -->
+<div class="modal-overlay hidden" id="alertModalOverlay">
+  <div class="modal-box" style="border-top-color: var(--pen-red); max-width: 320px; text-align: center;" role="dialog" aria-modal="true" aria-labelledby="alertModalTitle">
+    <h3 id="alertModalTitle" style="font-family:'Caveat', cursive; font-size: 2.2rem; margin: 0 0 10px;">¡Usuario Creado!</h3>
+    <p id="alertModalMessage" style="color: var(--ink-soft); font-size: 0.95rem; line-height: 1.4; margin-bottom: 20px;">Tu cuenta ha sido registrada con éxito. Iniciando sesión...</p>
+    <button class="btn-primary" id="btnAlertModalClose" style="margin-top: 0; width: 100%;">Aceptar</button>
+  </div>
+</div>
+
+<!-- CONFIRMATION MODAL -->
+<div class="modal-overlay hidden" id="confirmModalOverlay">
+  <div class="modal-box" style="border-top-color: var(--pen-red); max-width: 340px;" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+    <h3 id="confirmModalTitle" style="font-family:'Caveat', cursive; font-size: 2rem; margin: 0 0 10px; color: var(--ink);">¿Estás seguro?</h3>
+    <p id="confirmModalText" style="color: var(--ink-soft); font-size: 0.92rem; line-height: 1.4; margin-bottom: 20px; font-family: 'Inter', sans-serif;">Esta acción es permanente y no se puede deshacer.</p>
+    <div style="display:flex; gap:10px; justify-content: flex-end;">
+      <button class="btn-secondary" id="btnConfirmCancel" style="margin-top:0; width:auto; padding: 8px 16px;">Cancelar</button>
+      <button class="btn-primary" id="btnConfirmAccept" style="margin-top:0; width:auto; padding: 8px 16px; background-color: var(--pen-red); box-shadow: none;">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Polyfill for crypto.randomUUID to support insecure contexts (e.g., local IP access)
+  if (!window.crypto) {
+    window.crypto = {};
+  }
+  if (!window.crypto.randomUUID) {
+    window.crypto.randomUUID = function() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    };
+  }
+
+  // Register Service Worker for offline access
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => {
+          console.log('Service Worker registrado:', reg.scope);
+          // Auto-actualizar y recargar la página cuando se instale una nueva versión del SW
+          reg.addEventListener('updatefound', () => {
+            const installingWorker = reg.installing;
+            installingWorker.addEventListener('statechange', () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('Nueva versión del Service Worker instalada. Recargando página...');
+                window.location.reload();
+              }
+            });
+          });
+        })
+        .catch(err => console.error('Error al registrar Service Worker:', err));
+    });
+  }
+
+  // Global fetch wrapper to inject x-username header for authentication
+  const originalFetch = window.fetch;
+  window.fetch = function(url, options = {}) {
+    const username = localStorage.getItem('username');
+    if (username) {
+      options.headers = options.headers || {};
+      options.headers['x-username'] = username;
+    }
+    return originalFetch(url, options);
+  };
+
+  // Configure PDF.js worker
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+  }
+
+  const screens = {
+    auth: document.getElementById('screen-auth'),
+    config: document.getElementById('screen-config'),
+    loading: document.getElementById('screen-loading'),
+    exam: document.getElementById('screen-exam'),
+    results: document.getElementById('screen-results'),
+    history: document.getElementById('screen-history'),
+    historyDetail: document.getElementById('screen-history-detail'),
+    library: document.getElementById('screen-library'),
+    filePreview: document.getElementById('screen-file-preview'),
+    groupExams: document.getElementById('screen-group-exams'),
+  };
+
+  function showScreen(name){
+    Object.values(screens).forEach(s => s.classList.add('hidden'));
+    if (screens[name]) {
+      screens[name].classList.remove('hidden');
+    }
+  }
+ 
+  const els = {
+    authUsername: document.getElementById('authUsername'),
+    authPassword: document.getElementById('authPassword'),
+    authErrorBox: document.getElementById('authErrorBox'),
+    btnSubmitAuth: document.getElementById('btnSubmitAuth'),
+    btnToggleAuthMode: document.getElementById('btnToggleAuthMode'),
+    toggleActionText: document.getElementById('toggleActionText'),
+    authTitle: document.getElementById('authTitle'),
+    authSubtitle: document.getElementById('authSubtitle'),
+    currentUserDisplay: document.getElementById('currentUserDisplay'),
+    btnLogout: document.getElementById('btnLogout'),
+    topic: document.getElementById('topic'),
+    numQuestions: document.getElementById('numQuestions'),
+    timerMinutes: document.getElementById('timerMinutes'),
+    fileDrop: document.getElementById('fileDrop'),
+    fileInput: document.getElementById('fileInput'),
+    libSearchInput: document.getElementById('libSearchInput'),
+    btnToggleLibDropdown: document.getElementById('btnToggleLibDropdown'),
+    libSearchDropdown: document.getElementById('libSearchDropdown'),
+    selectedFilesList: document.getElementById('selectedFilesList'),
+    btnGenerate: document.getElementById('btnGenerate'),
+    errorBox: document.getElementById('errorBox'),
+    loadingMsg: document.getElementById('loadingMsg'),
+    progressLabel: document.getElementById('progressLabel'),
+    progressFill: document.getElementById('progressFill'),
+    timerClock: document.getElementById('timerClock'),
+    questionText: document.getElementById('questionText'),
+    optionsList: document.getElementById('optionsList'),
+    btnPrev: document.getElementById('btnPrev'),
+    btnNext: document.getElementById('btnNext'),
+    btnFinish: document.getElementById('btnFinish'),
+    stampText: document.getElementById('stampText'),
+    scoreNumber: document.getElementById('scoreNumber'),
+    reviewList: document.getElementById('reviewList'),
+    btnNewExam: document.getElementById('btnNewExam'),
+    btnGoHistoryFromResults: document.getElementById('btnGoHistoryFromResults'),
+    btnGoToConfig: document.getElementById('btnGoToConfig'),
+    btnGoToLibrary: document.getElementById('btnGoToLibrary'),
+    btnCreateNewGroup: document.getElementById('btnCreateNewGroup'),
+    btnBackToHomeFromConfig: document.getElementById('btnBackToHomeFromConfig'),
+    btnBackToHomeFromLibrary: document.getElementById('btnBackToHomeFromLibrary'),
+    btnBackToLibraryFromPreview: document.getElementById('btnBackToLibraryFromPreview'),
+    btnDownloadFile: document.getElementById('btnDownloadFile'),
+    btnDeleteFileFromPreview: document.getElementById('btnDeleteFileFromPreview'),
+    btnBackFromDetail: document.getElementById('btnBackFromDetail'),
+    btnClearHistory: document.getElementById('btnClearHistory'),
+    historyList: document.getElementById('historyList'),
+    historyEmpty: document.getElementById('historyEmpty'),
+    groupCardsContainer: document.getElementById('groupCardsContainer'),
+    resultGroupSelect: document.getElementById('resultGroupSelect'),
+    groupExamsTitle: document.getElementById('groupExamsTitle'),
+    groupExamsStats: document.getElementById('groupExamsStats'),
+    btnBackFromGroupExams: document.getElementById('btnBackFromGroupExams'),
+    btnGoToLibraryFromGroup: document.getElementById('btnGoToLibraryFromGroup'),
+    btnGoToConfigFromGroup: document.getElementById('btnGoToConfigFromGroup'),
+    detailTopic: document.getElementById('detailTopic'),
+    detailStamp: document.getElementById('detailStamp'),
+    detailScore: document.getElementById('detailScore'),
+    detailReviewList: document.getElementById('detailReviewList'),
+    detailGroupSelect: document.getElementById('detailGroupSelect'),
+    previewFileName: document.getElementById('previewFileName'),
+    previewContainer: document.getElementById('previewContainer'),
+    libFileDrop: document.getElementById('libFileDrop'),
+    libFileInput: document.getElementById('libFileInput'),
+    libLibraryList: document.getElementById('libLibraryList'),
+    libLibraryEmpty: document.getElementById('libLibraryEmpty'),
+    librarySearchInput: document.getElementById('librarySearchInput'),
+    btnClearLibrary: document.getElementById('btnClearLibrary'),
+    modalOverlay: document.getElementById('modalOverlay'),
+    groupModalTitle: document.getElementById('groupModalTitle'),
+    groupModalInput: document.getElementById('groupModalInput'),
+    btnModalCancel: document.getElementById('btnModalCancel'),
+    btnModalSave: document.getElementById('btnModalSave'),
+    confirmModalOverlay: document.getElementById('confirmModalOverlay'),
+    confirmModalTitle: document.getElementById('confirmModalTitle'),
+    confirmModalText: document.getElementById('confirmModalText'),
+    btnConfirmCancel: document.getElementById('btnConfirmCancel'),
+    btnConfirmAccept: document.getElementById('btnConfirmAccept'),
+  };
+ 
+  const state = {
+    questions: [],
+    current: 0,
+    answers: [],
+    timeLeft: 0,
+    timerInterval: null,
+    availableFiles: [], // { id, name, content, sizeLabel, mediaType, checked }
+    currentTopic: '',
+    examHistory: [], // { id, topic, date, questions, answers, result, groupId }
+    groups: [], // { id, name }
+    activeGroupTab: 'all', // 'all' | 'ungrouped' | group.id
+    activePreviewFileId: null,
+    configReferrer: 'history',
+    libraryReferrer: 'history',
+    difficulty: 'normal'
+  };
+ 
+  const TEXT_EXTENSIONS = ['.txt','.md','.csv','.json'];
+  const MAX_TEXT_CHARS_PER_FILE = 40000;
+ 
+  function formatSize(bytes){
+    if(bytes < 1024) return bytes + ' B';
+    if(bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/(1024*1024)).toFixed(1) + ' MB';
+  }
+
+  function escapeHtml(text) {
+    if (typeof text !== 'string') return '';
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+ 
+  function readFileAsText(file){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(new Error('No se pudo leer ' + file.name));
+      r.readAsText(file);
+    });
+  }
+
+  function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(new Error('No se pudo leer ' + file.name));
+      r.readAsArrayBuffer(file);
+    });
+  }
+
+  function readFileAsBase64(file){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result.split(',')[1]);
+      r.onerror = () => reject(new Error('No se pudo leer ' + file.name));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function handleFiles(fileListRaw, autoCheck = true){
+    const files = Array.from(fileListRaw);
+    for(const file of files){
+      // Check for duplicates
+      const existingFile = state.availableFiles.find(f => f.name === file.name);
+      if (existingFile) {
+        await showCustomAlert('Archivo duplicado', `El archivo "${file.name}" ya existe en la biblioteca.`);
+        
+        // Associate with current group if we are in a group screen
+        const activeGroup = (state.activeGroupTab !== 'all' && state.activeGroupTab !== 'ungrouped') ? state.activeGroupTab : null;
+        if (activeGroup && existingFile.groupId !== activeGroup) {
+          try {
+            const res = await fetch(`/api/files/${existingFile.id}/group`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groupId: activeGroup })
+            });
+            if (!res.ok) throw new Error('Error al actualizar el grupo del archivo');
+            existingFile.groupId = activeGroup;
+          } catch (e) {
+            console.error('Error al asociar archivo existente al grupo:', e);
+          }
+        }
+        
+        if (autoCheck) {
+          existingFile.checked = true;
+        }
+        
+        continue;
+      }
+
+      const lowerName = file.name.toLowerCase();
+      const isPdf = lowerName.endsWith('.pdf');
+      const isDocx = lowerName.endsWith('.docx') || lowerName.endsWith('.doc');
+      const isXlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+      const isPptx = lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt');
+      const isText = TEXT_EXTENSIONS.some(ext => lowerName.endsWith(ext)) || (file.type.startsWith('text/') && !isPdf && !isDocx && !isXlsx && !isPptx);
+ 
+      try{
+        let content = '';
+        let originalData = '';
+        let pdfImages = [];
+        const mediaType = file.type || (isPdf ? 'application/pdf' : 'text/plain');
+
+        originalData = await readFileAsBase64(file);
+
+        if(isPdf){
+          if (!window.pdfjsLib) {
+            throw new Error('La librería PDF.js no se ha cargado. No se puede procesar PDFs.');
+          }
+          const buffer = await readFileAsArrayBuffer(file);
+          const loadingTask = pdfjsLib.getDocument({ data: buffer });
+          const pdf = await loadingTask.promise;
+          
+          let fullText = "";
+          const skipImages = pdf.numPages > 15;
+          // Scan pages for text and images
+          for (let i = 1; i <= pdf.numPages; i++) {
+            if (fullText.length >= MAX_TEXT_CHARS_PER_FILE) {
+              break;
+            }
+
+            const page = await pdf.getPage(i);
+            
+            // Extract text
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(" ") + "\n";
+            fullText += `--- PAGINA ${i} ---\n${pageText}\n`;
+            
+            if (skipImages) {
+              continue;
+            }
+
+            // Detect and extract embedded images from the page operator list
+            const opList = await page.getOperatorList();
+            for (let j = 0; j < opList.fnArray.length; j++) {
+              const fn = opList.fnArray[j];
+              if (fn === pdfjsLib.OPS.paintImageXObject || 
+                  fn === pdfjsLib.OPS.paintInlineImageXObject ||
+                  fn === pdfjsLib.OPS.paintImageXObjectRepeat) {
+                
+                const objId = opList.argsArray[j][0];
+                try {
+                  const imgObj = await new Promise((resolve) => {
+                    page.objs.get(objId, (obj) => { resolve(obj); });
+                  });
+                  
+                  if (imgObj) {
+                    let dataUrl = null;
+                    if (imgObj instanceof HTMLImageElement || imgObj instanceof HTMLCanvasElement || (imgObj.nodeName && (imgObj.nodeName === 'IMG' || imgObj.nodeName === 'CANVAS'))) {
+                      const canvas = document.createElement('canvas');
+                      canvas.width = imgObj.width || imgObj.videoWidth;
+                      canvas.height = imgObj.height || imgObj.videoHeight;
+                      const ctx = canvas.getContext('2d');
+                      ctx.drawImage(imgObj, 0, 0);
+                      dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                    } else if (imgObj.width && imgObj.height && imgObj.data) {
+                      const canvas = document.createElement('canvas');
+                      canvas.width = imgObj.width;
+                      canvas.height = imgObj.height;
+                      const ctx = canvas.getContext('2d');
+                      
+                      const src = imgObj.data;
+                      const totalPixels = imgObj.width * imgObj.height;
+                      const rgbaData = new Uint8ClampedArray(totalPixels * 4);
+                      
+                      if (src.length === totalPixels * 3) {
+                        // RGB to RGBA
+                        let idx = 0;
+                        for (let p = 0; p < src.length; p += 3) {
+                          rgbaData[idx] = src[p];
+                          rgbaData[idx+1] = src[p+1];
+                          rgbaData[idx+2] = src[p+2];
+                          rgbaData[idx+3] = 255;
+                          idx += 4;
+                        }
+                      } else if (src.length === totalPixels * 4) {
+                        rgbaData.set(src);
+                      } else if (src.length === totalPixels) {
+                        // Grayscale to RGBA
+                        let idx = 0;
+                        for (let p = 0; p < src.length; p++) {
+                          rgbaData[idx] = src[p];
+                          rgbaData[idx+1] = src[p];
+                          rgbaData[idx+2] = src[p];
+                          rgbaData[idx+3] = 255;
+                          idx += 4;
+                        }
+                      } else {
+                        continue;
+                      }
+                      
+                      const imgData = new ImageData(rgbaData, imgObj.width, imgObj.height);
+                      ctx.putImageData(imgData, 0, 0);
+                      dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                    }
+                    
+                    if (dataUrl) {
+                      pdfImages.push({
+                        page: i,
+                        dataUrl: dataUrl
+                      });
+                    }
+                  }
+                } catch (err) {
+                  console.warn("Error al extraer objeto de imagen del PDF:", err);
+                }
+              }
+            }
+          }
+          
+content = fullText;
+        } else if (isDocx) {
+          if (lowerName.endsWith('.doc')) {
+            throw new Error('El formato .doc antiguo no está soportado. Por favor, conviértelo a .docx.');
+          }
+          if (!window.mammoth) {
+            throw new Error('La librería Mammoth.js no está cargada.');
+          }
+          const buffer = await readFileAsArrayBuffer(file);
+          const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+          content = result.value;
+        } else if (isXlsx) {
+          if (!window.XLSX) {
+            throw new Error('La librería SheetJS no está cargada.');
+          }
+          const buffer = await readFileAsArrayBuffer(file);
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          let sheetText = "";
+          workbook.SheetNames.forEach(sheetName => {
+            const worksheet = workbook.Sheets[sheetName];
+            const csv = XLSX.utils.sheet_to_csv(worksheet);
+            sheetText += `--- Hoja: ${sheetName} ---\n${csv}\n`;
+          });
+          content = sheetText;
+        } else if (isPptx) {
+          if (lowerName.endsWith('.ppt')) {
+            throw new Error('El formato .ppt antiguo no está soportado. Por favor, conviértelo a .pptx.');
+          }
+          if (!window.JSZip) {
+            throw new Error('La librería JSZip no está cargada.');
+          }
+          const buffer = await readFileAsArrayBuffer(file);
+          const zip = await JSZip.loadAsync(buffer);
+          let pptxText = "";
+          
+          const slideFiles = Object.keys(zip.files).filter(name => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'));
+          slideFiles.sort((a, b) => {
+            const numA = parseInt(a.replace(/[^\d]/g, ''));
+            const numB = parseInt(b.replace(/[^\d]/g, ''));
+            return numA - numB;
+          });
+          
+          for (const slideFile of slideFiles) {
+            const slideXml = await zip.files[slideFile].async("string");
+            const regex = /<a:t>([\s\S]*?)<\/a:t>/g;
+            let match;
+            let slideContent = "";
+            while ((match = regex.exec(slideXml)) !== null) {
+              const text = match[1].replace(/&amp;/g, '&')
+                                   .replace(/&lt;/g, '<')
+                                   .replace(/&gt;/g, '>')
+                                   .replace(/&quot;/g, '"')
+                                   .replace(/&#39;/g, "'");
+              slideContent += text + " ";
+            }
+            const slideNum = slideFile.replace(/[^\d]/g, '');
+            pptxText += `--- Diapositiva ${slideNum} ---\n${slideContent.trim()}\n`;
+          }
+          content = pptxText;
+        } else if(isText){
+          content = await readFileAsText(file);
+        } else {
+          setError('Formato no admitido: ' + file.name + '. Se admiten PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS y PPTX.');
+          continue;
+        }
+
+        let truncated = false;
+        if(content.length > MAX_TEXT_CHARS_PER_FILE){
+          content = content.slice(0, MAX_TEXT_CHARS_PER_FILE);
+          truncated = true;
+        }
+
+        const fileRecord = {
+          id: crypto.randomUUID(),
+          name: file.name,
+          content: content,
+          sizeLabel: formatSize(file.size) + (truncated ? ' · recortado' : ''),
+          originalData: originalData,
+          mediaType: mediaType,
+          pdfImages: pdfImages,
+          groupId: (autoCheck && state.activeGroupTab !== 'all' && state.activeGroupTab !== 'ungrouped') ? state.activeGroupTab : null
+        };
+
+        // Upload to database
+        const res = await fetch('/api/files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fileRecord)
+        });
+        if (!res.ok) throw new Error('Error al registrar archivo en base de datos');
+
+        // Cachear en LocalStorage para uso sin conexión
+        const fileObjForCache = {
+          id: fileRecord.id,
+          name: fileRecord.name,
+          content: fileRecord.content,
+          size_label: fileRecord.sizeLabel,
+          original_data: fileRecord.originalData,
+          media_type: fileRecord.mediaType,
+          pdfImages: fileRecord.pdfImages,
+          groupId: fileRecord.groupId
+        };
+        localStorage.setItem(`offline_file_${fileRecord.id}`, JSON.stringify(fileObjForCache));
+
+        // Add to local state
+        fileRecord.checked = autoCheck;
+        state.availableFiles.push(fileRecord);
+
+      }catch(err){
+        console.error(err);
+        setError(err.message || ('No se pudo procesar ' + file.name));
+      }
+    }
+    renderLibraryLists();
+  }
+
+  function renderConfigLibraryUI(){
+    const query = (els.libSearchInput.value || '').trim().toLowerCase();
+    
+    // 1. Render dropdown items
+    els.libSearchDropdown.innerHTML = '';
+    
+    const filteredFiles = state.availableFiles.filter(f => 
+      f.name.toLowerCase().includes(query)
+    );
+    
+    if (filteredFiles.length === 0) {
+      const empty = document.createElement('div');
+      empty.style.padding = '8px 14px';
+      empty.style.color = 'var(--ink-soft)';
+      empty.style.fontStyle = 'italic';
+      empty.style.fontSize = '0.8rem';
+      empty.textContent = 'No se encontraron archivos.';
+      els.libSearchDropdown.appendChild(empty);
+    } else {
+      filteredFiles.forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'lib-dropdown-item';
+        item.innerHTML = `
+          <input type="checkbox" class="drop-checkbox" data-id="${f.id}" ${f.checked ? 'checked' : ''}>
+          <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(f.name)}</span>
+        `;
+        
+        // Prevent click events on checkbox from double-triggering item click
+        item.querySelector('.drop-checkbox').addEventListener('click', (e) => {
+          e.stopPropagation();
+          f.checked = e.target.checked;
+          renderConfigLibraryUI();
+        });
+        
+        item.addEventListener('click', () => {
+          f.checked = !f.checked;
+          renderConfigLibraryUI();
+        });
+        els.libSearchDropdown.appendChild(item);
+      });
+    }
+    
+    // 2. Render selected files below
+    els.selectedFilesList.innerHTML = '';
+    const selectedFiles = state.availableFiles.filter(f => f.checked);
+    
+    if (selectedFiles.length === 0) {
+      const empty = document.createElement('div');
+      empty.style.color = 'var(--ink-soft)';
+      empty.style.fontStyle = 'italic';
+      empty.style.fontSize = '0.82rem';
+      empty.style.padding = '4px 0';
+      empty.textContent = 'Ningún archivo seleccionado para este examen.';
+      els.selectedFilesList.appendChild(empty);
+    } else {
+      selectedFiles.forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'selected-file-item';
+        item.innerHTML = `
+          <input type="checkbox" class="sel-checkbox" data-id="${f.id}" checked>
+          <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(f.name)}</span>
+        `;
+        item.querySelector('.sel-checkbox').addEventListener('change', (e) => {
+          f.checked = e.target.checked;
+          renderConfigLibraryUI();
+        });
+        els.selectedFilesList.appendChild(item);
+      });
+    }
+  }
+
+  function renderLibraryLists(){
+    // Render dropdown and selected files in config screen
+    renderConfigLibraryUI();
+
+    // 2. Render in main Library screen list
+    els.libLibraryList.innerHTML = '';
+    
+    const query = (els.librarySearchInput.value || '').trim().toLowerCase();
+    
+    // Filter by group if entered from a group screen, otherwise show all files
+    let baseFiles = state.availableFiles;
+    const isGroup = state.libraryReferrer === 'groupExams';
+    if (isGroup) {
+      baseFiles = baseFiles.filter(f => f.groupId === state.activeGroupTab);
+      els.btnClearLibrary.textContent = 'Eliminar todos los archivos de este grupo';
+    } else {
+      els.btnClearLibrary.textContent = 'Eliminar todos los archivos';
+    }
+    
+    const filteredFiles = baseFiles.filter(f => f.name.toLowerCase().includes(query));
+
+    if (filteredFiles.length === 0) {
+      els.libLibraryEmpty.classList.remove('hidden');
+      if (query !== '') {
+        els.libLibraryEmpty.textContent = 'No se encontraron archivos que coincidan con la búsqueda.';
+      } else {
+        els.libLibraryEmpty.textContent = 'No hay archivos en la biblioteca. Sube un archivo arriba para comenzar.';
+      }
+      els.btnClearLibrary.classList.add('hidden');
+    } else {
+      els.libLibraryEmpty.classList.add('hidden');
+      els.btnClearLibrary.classList.remove('hidden');
+      filteredFiles.forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.style.borderLeftColor = 'var(--chalk-green)';
+        item.innerHTML = `
+          <div class="hi-main">
+            <div class="hi-topic">${escapeHtml(f.name)}</div>
+            <div class="hi-date">Haga clic para ver vista previa</div>
+          </div>
+          <div style="display:flex; align-items:center; gap: 12px;">
+            <button type="button" class="btn-delete-file" title="Eliminar archivo" style="background:none; border:none; color:var(--pen-red); font-size:1.15rem; cursor:pointer; padding: 6px; border-radius:4px; transition: background-color 0.15s ease;">🗑</button>
+            <div class="hi-arrow">❯</div>
+          </div>
+        `;
+        
+        item.querySelector('.btn-delete-file').addEventListener('click', (e) => {
+          e.stopPropagation(); // Avoid triggering preview
+          deleteFileDirectly(f.id);
+        });
+        
+        item.addEventListener('click', () => showFilePreview(f.id));
+        els.libLibraryList.appendChild(item);
+      });
+    }
+  }
+
+  async function deleteFileDirectly(fileId){
+    const file = state.availableFiles.find(f => f.id === fileId);
+    if (!file) return;
+    
+    const isGroup = state.libraryReferrer === 'groupExams';
+    const confirmTitle = isGroup ? 'Quitar del grupo' : 'Eliminar archivo';
+    const confirmMsg = isGroup 
+      ? `¿Eliminar "${file.name}" de este grupo?` 
+      : `¿Eliminar "${file.name}" de la biblioteca permanentemente? Se quitará también de todos los grupos.`;
+      
+    const confirmed = await showConfirmModal(confirmTitle, confirmMsg);
+    if(!confirmed) return;
+    
+    try {
+      if (isGroup) {
+        // Just disassociate from the group
+        const res = await fetch(`/api/files/${fileId}/group`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupId: null })
+        });
+        if (!res.ok) throw new Error('Error al quitar del grupo.');
+        file.groupId = null;
+      } else {
+        // Complete soft-delete
+        const res = await fetch(`/api/files/${fileId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Error al borrar de la base de datos.');
+        state.availableFiles = state.availableFiles.filter(f => f.id !== fileId);
+      }
+      renderLibraryLists();
+    } catch(e) {
+      showCustomAlert('Error', 'No se pudo procesar la eliminación: ' + e.message);
+    }
+  }
+
+  let currentPreviewUrl = null;
+
+  async function showFilePreview(fileId) {
+    try {
+      showScreen('loading');
+      let file = null;
+      try {
+        const res = await fetch(`/api/files/${fileId}`);
+        if (!res.ok) throw new Error('No se pudo recuperar el archivo de la base de datos.');
+        file = await res.json();
+        // Guardar en caché local para lectura offline
+        localStorage.setItem(`offline_file_${fileId}`, JSON.stringify(file));
+      } catch (fetchErr) {
+        console.warn('Error al obtener archivo del servidor, buscando en caché local...', fetchErr);
+        const cached = localStorage.getItem(`offline_file_${fileId}`);
+        if (cached) {
+          file = JSON.parse(cached);
+        } else {
+          throw new Error('Este archivo no está almacenado localmente para verse sin conexión.');
+        }
+      }
+      
+      state.activePreviewFileId = file.id;
+      els.previewFileName.textContent = file.name;
+      els.previewFileName.title = file.name;
+      
+      if (currentPreviewUrl) {
+        URL.revokeObjectURL(currentPreviewUrl);
+        currentPreviewUrl = null;
+      }
+
+      const isPdf = file.media_type === 'application/pdf';
+      if (isPdf) {
+        // Render exact original PDF inside an iframe
+        const binaryString = atob(file.original_data);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes.buffer], { type: 'application/pdf' });
+        currentPreviewUrl = URL.createObjectURL(blob);
+        els.previewContainer.innerHTML = `<iframe src="${currentPreviewUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+      } else {
+        // Render text formatted content inside a padded scroll box
+        els.previewContainer.innerHTML = `
+          <div style="padding: 16px; height: 100%; overflow-y: auto; font-family: 'Courier Prime', monospace; font-size: 0.9rem; white-space: pre-wrap; color: var(--ink);">
+            <pre style="margin: 0; font-family: inherit; white-space: pre-wrap;">${escapeHtml(file.content)}</pre>
+          </div>
+        `;
+      }
+      
+      showScreen('filePreview');
+    } catch(e) {
+      console.error(e);
+      showScreen('library');
+      setError('Error al cargar la vista previa: ' + e.message);
+    }
+  }
+
+  function downloadBase64File(base64Data, fileName, mediaType) {
+    const binaryString = atob(base64Data);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes.buffer], { type: mediaType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  els.btnDownloadFile.addEventListener('click', async () => {
+    if (!state.activePreviewFileId) return;
+    try {
+      let file = null;
+      try {
+        const res = await fetch(`/api/files/${state.activePreviewFileId}`);
+        if (!res.ok) throw new Error('Error al descargar.');
+        file = await res.json();
+        localStorage.setItem(`offline_file_${state.activePreviewFileId}`, JSON.stringify(file));
+      } catch (fetchErr) {
+        console.warn('Error al obtener archivo del servidor para descargar, buscando en caché local...', fetchErr);
+        const cached = localStorage.getItem(`offline_file_${state.activePreviewFileId}`);
+        if (cached) {
+          file = JSON.parse(cached);
+        } else {
+          throw new Error('El archivo no está en la caché local para descargarse sin conexión.');
+        }
+      }
+      downloadBase64File(file.original_data, file.name, file.media_type);
+    } catch(e) {
+      showCustomAlert('Error', 'Error al descargar el archivo: ' + e.message);
+    }
+  });
+
+  els.btnDeleteFileFromPreview.addEventListener('click', async () => {
+    if (!state.activePreviewFileId) return;
+    const file = state.availableFiles.find(f => f.id === state.activePreviewFileId);
+    if (!file) return;
+    
+    const isGroup = state.libraryReferrer === 'groupExams';
+    const confirmTitle = isGroup ? 'Quitar del grupo' : 'Eliminar archivo';
+    const confirmMsg = isGroup 
+      ? `¿Eliminar "${file.name}" de este grupo?` 
+      : `¿Eliminar "${file.name}" de la biblioteca permanentemente? Se quitará también de todos los grupos.`;
+      
+    const confirmed = await showConfirmModal(confirmTitle, confirmMsg);
+    if (!confirmed) return;
+ 
+    try {
+      if (isGroup) {
+        const res = await fetch(`/api/files/${state.activePreviewFileId}/group`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupId: null })
+        });
+        if (!res.ok) throw new Error('Error al quitar del grupo.');
+        file.groupId = null;
+      } else {
+        const res = await fetch(`/api/files/${state.activePreviewFileId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Error al borrar de la base de datos.');
+        state.availableFiles = state.availableFiles.filter(f => f.id !== state.activePreviewFileId);
+      }
+      state.activePreviewFileId = null;
+      renderLibraryLists();
+      showScreen('library');
+    } catch(e) {
+      showCustomAlert('Error', 'No se pudo procesar la eliminación: ' + e.message);
+    }
+  });
+ 
+  els.fileInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files, true);
+    els.fileInput.value = '';
+  });
+  ['dragover','dragenter'].forEach(evt => {
+    els.fileDrop.addEventListener(evt, (e) => { e.preventDefault(); els.fileDrop.classList.add('dragover'); });
+    els.libFileDrop.addEventListener(evt, (e) => { e.preventDefault(); els.libFileDrop.classList.add('dragover'); });
+  });
+  ['dragleave','drop'].forEach(evt => {
+    els.fileDrop.addEventListener(evt, (e) => { e.preventDefault(); els.fileDrop.classList.remove('dragover'); });
+    els.libFileDrop.addEventListener(evt, (e) => { e.preventDefault(); els.libFileDrop.classList.remove('dragover'); });
+  });
+  els.fileDrop.addEventListener('drop', (e) => {
+    if(e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files, true);
+  });
+  els.libFileInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files, false);
+    els.libFileInput.value = '';
+  });
+  els.libFileDrop.addEventListener('drop', (e) => {
+    if(e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files, false);
+  });
+  els.libFileDrop.addEventListener('click', () => els.libFileInput.click());
+  els.fileDrop.addEventListener('click', () => els.fileInput.click()); 
+  const loadingPhrases = [
+    "Investigando el tema en profundidad…",
+    "Analizando los textos de referencia…",
+    "Diseñando preguntas y casos prácticos…",
+    "Estructurando la plantilla del examen…",
+    "Preparando justificaciones pedagógicas paso a paso…",
+    "Afilando el lápiz rojo de tiza…",
+  ];
+ 
+  function setError(msg){
+    if(!msg){ els.errorBox.classList.add('hidden'); els.errorBox.textContent=''; return; }
+    els.errorBox.textContent = msg;
+    els.errorBox.classList.remove('hidden');
+  }
+ 
+  els.btnGenerate.addEventListener('click', generateExam);
+ 
+  // Set default difficulty active class
+  document.querySelectorAll('.difficulty-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.difficulty-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.difficulty = btn.dataset.value;
+    });
+  });
+ 
+  function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
+  async function generateExam(){
+    const topic = els.topic.value.trim();
+    const rawNumQuestions = parseInt(els.numQuestions.value);
+ 
+    if(!topic){
+      setError('Escribe un tema para generar el examen.');
+      return;
+    }
+ 
+    if(isNaN(rawNumQuestions) || rawNumQuestions > 60){
+      showCustomAlert('Límite de Preguntas', 'El número máximo de preguntas que se pueden generar por examen es 60.');
+      return;
+    }
+    if(rawNumQuestions < 3){
+      showCustomAlert('Mínimo de Preguntas', 'El número mínimo de preguntas para generar un examen es 3.');
+      return;
+    }
+ 
+    const numQuestions = rawNumQuestions;
+    const timerMinutes = Math.max(1, parseInt(els.timerMinutes.value) || 10);
+    setError(null);
+    state.currentTopic = topic;
+ 
+    showScreen('loading');
+    let msgIdx = 0;
+    els.loadingMsg.textContent = loadingPhrases[0];
+    const msgInterval = setInterval(() => {
+      if (els.loadingMsg.textContent.startsWith("Generando preguntas (") || els.loadingMsg.textContent.startsWith("Reintentando")) {
+        return; // No sobreescribir el progreso de lotes
+      }
+      msgIdx = (msgIdx + 1) % loadingPhrases.length;
+      els.loadingMsg.textContent = loadingPhrases[msgIdx];
+    }, 1600);
+ 
+    try{
+      const questions = await fetchQuestions(topic, numQuestions);
+      clearInterval(msgInterval);
+      if(!questions.length){
+        throw new Error('No se pudieron generar preguntas. Intenta con otro tema.');
+      }
+      state.questions = shuffleArray(questions);
+      state.answers = new Array(questions.length).fill(null);
+      state.current = 0;
+      state.timeLeft = timerMinutes * 60;
+      startExam();
+      // Generar explicaciones y justificaciones didácticas en segundo plano
+      fetchExplanationsInBackground(state.questions);
+    }catch(err){
+      clearInterval(msgInterval);
+      console.error(err);
+      showScreen('config');
+      setError('Hubo un problema generando el examen: ' + (err.message || 'error desconocido') + '. Intenta de nuevo.');
+    }
+  }
+ 
+  async function fetchQuestions(topic, numQuestions){
+    // Collect questions from the last 15 exams of the same topic (sliding window)
+    const sameTopicExams = state.examHistory
+      .filter(e => e.topic.toLowerCase().trim() === topic.toLowerCase().trim())
+      .slice(0, 15);
+      
+    const pastExclusions = [];
+    sameTopicExams.forEach(e => {
+      if (e.questions) {
+        e.questions.forEach(q => {
+          if (q.question) pastExclusions.push(q.question);
+        });
+      }
+    });
+
+    const selectedFiles = state.availableFiles.filter(f => f.checked);
+    
+    // Generar en sub-lotes paralelos de máximo 10 preguntas para no chocar con el límite de tokens de la API
+    const maxBatchSize = 10;
+    let questions = [];
+    
+    const totalBatches = Math.ceil(numQuestions / maxBatchSize);
+    els.loadingMsg.textContent = `Iniciando generación paralela (${totalBatches} lotes)…`;
+
+    const promises = [];
+    for (let i = 0; i < totalBatches; i++) {
+      const remaining = numQuestions - (i * maxBatchSize);
+      const batchSize = Math.min(maxBatchSize, remaining);
+      promises.push(
+        getQuestionsBatch(topic, batchSize, selectedFiles, pastExclusions, i + 1, totalBatches)
+      );
+    }
+
+    try {
+      // Ejecutar todas las llamadas en paralelo y recopilar los éxitos (Promise.allSettled)
+      const results = await Promise.allSettled(promises);
+      
+      results.forEach(res => {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          res.value.forEach(q => {
+            const isDuplicate = questions.some(existing => 
+              existing.question.toLowerCase().trim() === q.question.toLowerCase().trim()
+            );
+            if (!isDuplicate && !pastExclusions.includes(q.question)) {
+              questions.push(q);
+            }
+          });
+        } else if (res.status === 'rejected') {
+          console.warn("Un lote de generación paralela falló:", res.reason);
+        }
+      });
+    } catch (err) {
+      console.error("Error crítico en la generación paralela inicial:", err);
+    }
+
+    // Si faltan algunas preguntas (debido a duplicados descartados o fallos parciales), se completan secuencialmente
+    let attempts = 0;
+    const maxTotalAttempts = 10;
+    
+    while (questions.length < numQuestions && attempts < maxTotalAttempts) {
+      attempts++;
+      const currentTexts = questions.map(q => q.question);
+      const combinedExclusions = [...pastExclusions, ...currentTexts];
+      
+      const remainingNeeded = numQuestions - questions.length;
+      // Pedimos un excedente (+3) para mitigar duplicados/descartes por la IA, limitado a maxBatchSize
+      const nextBatchSize = Math.min(maxBatchSize, remainingNeeded + 3);
+
+      els.loadingMsg.textContent = `Completando preguntas restantes (${questions.length} de ${numQuestions})…`;
+
+      try {
+        const batch = await getQuestionsBatch(topic, nextBatchSize, selectedFiles, combinedExclusions, 99, 99);
+        const newOnes = batch.filter(m => !combinedExclusions.includes(m.question));
+        if (newOnes.length === 0) {
+          continue;
+        }
+        questions = questions.concat(newOnes);
+      } catch (err) {
+        console.error("Error en lote de corrección secuencial:", err);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    if (questions.length > numQuestions) {
+      questions = questions.slice(0, numQuestions);
+    }
+    if (questions.length !== numQuestions) {
+      throw new Error(`No se pudo generar la cantidad exacta de preguntas (solicitadas: ${numQuestions}, obtenidas: ${questions.length}).`);
+    }
+    return questions;
+  }
+
+  async function fetchExplanationsInBackground(questions) {
+    const questionsWithIdx = questions.map((q, idx) => ({ ...q, globalIndex: idx }));
+    const batchSize = 10;
+    const totalBatches = Math.ceil(questionsWithIdx.length / batchSize);
+    
+    const promises = [];
+    for (let i = 0; i < totalBatches; i++) {
+      const start = i * batchSize;
+      const batchQuestions = questionsWithIdx.slice(start, start + batchSize);
+      promises.push(fetchExplanationBatch(batchQuestions));
+    }
+    
+    try {
+      await Promise.all(promises);
+      console.log("Todas las explicaciones de la IA se cargaron en segundo plano.");
+      // Si el usuario ya está en la pantalla de resultados, refrescar reactivamente para pintarlas
+      if (state.currentScreen === 'results') {
+        const resultsContainer = document.getElementById('reviewList');
+        if (resultsContainer) {
+          renderReview(resultsContainer, state.questions, state.answers);
+        }
+      }
+    } catch (e) {
+      console.error("Error cargando explicaciones en segundo plano:", e);
+    }
+  }
+
+  async function fetchExplanationBatch(batchQuestions) {
+    const systemPrompt = `Eres un tutor académico experto. Tu tarea es generar explicaciones y justificaciones didácticas para la lista de preguntas provista por el usuario.
+    
+    Para cada pregunta identificada por su "globalIndex", debes generar:
+    1. "explanation": una explicación teórica o lógica general de la respuesta correcta.
+    2. "explanations": un array de exactamente 5 strings (uno para cada opción en el mismo orden que "options"), detallando brevemente y de forma concisa (máximo 20-25 palabras por opción) el error de concepto de las opciones incorrectas y el acierto de la correcta.
+    
+    REGLA DE CONCISIÓN:
+    - Limita cada justificación en "explanations" a máximo 1 o 2 frases cortas (máximo 20-25 palabras).
+    
+    CALIDAD UNIVERSAL DE LAS JUSTIFICACIONES:
+    - Mantén siempre el más alto rigor científico, didáctico y académico al redactar la explicación general ("explanation") y las justificaciones por opción ("explanations"). La calidad, profundidad y detalle explicativo de estas justificaciones debe ser universalmente alta, rigurosa y clara, sin importar cuál sea el tema o el nivel de dificultad seleccionado para el examen.
+    
+    IDIOMA DE GENERACIÓN:
+    - Debes generar las explicaciones ("explanation") y justificaciones ("explanations") en el mismo idioma en el que están escritas las preguntas provistas. Si las preguntas están en inglés, genera las explicaciones en inglés; si están en español, en español.
+    
+    Formato JSON esperado:
+    {
+      "explicaciones": [
+        {
+          "globalIndex": 0,
+          "explanation": "Explicación teórica general...",
+          "explanations": [
+            "Justificación para A...",
+            "Justificación para B...",
+            "Justificación para C...",
+            "Justificación para D...",
+            "Justificación para E..."
+          ]
+        }
+      ]
+    }
+    Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown, sin comentarios.`;
+
+    const userPrompt = `Genera las explicaciones y justificaciones didácticas para las siguientes preguntas del examen:
+    ${batchQuestions.map(q => `
+    - "globalIndex": ${q.globalIndex}
+      Pregunta: ${q.question}
+      Opciones: ${q.options.join(' | ')}
+      Índice de la respuesta correcta: ${q.correct}
+    `).join('\n')}`;
+
+    const apiBody = {
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+      max_tokens: 3000
+    };
+
+    let attempts = 0;
+    const maxAttempts = 3;
+    let lastError = null;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(apiBody)
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error ${response.status}`);
+        }
+
+        const data = await response.json();
+        const messageContent = data.choices[0].message.content;
+        let cleaned = messageContent.trim().replace(/```json/gi, '').replace(/```/g, '').trim();
+        const repaired = repairTruncatedJson(cleaned);
+        const parsed = JSON.parse(repaired);
+
+        const list = parsed.explicaciones || parsed;
+        if (!Array.isArray(list)) {
+          throw new Error("Respuesta de explicaciones inválida.");
+        }
+
+        list.forEach(item => {
+          const idx = item.globalIndex;
+          if (idx !== undefined && state.questions[idx]) {
+            state.questions[idx].explanation = item.explanation;
+            state.questions[idx].explanations = item.explanations;
+          }
+        });
+        return; // Éxito
+      } catch (e) {
+        console.warn(`Error en fetchExplanationBatch (intento ${attempts}):`, e);
+        lastError = e;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+    console.error("No se pudieron cargar explicaciones para el lote:", batchQuestions, lastError);
+  }
+
+  function isHealthSciences(topic, groupName) {
+    const keywords = [
+      'salud', 'medicina', 'médico', 'medica', 'clinico', 'clinica', 'clínico', 'clínica',
+      'enfermeria', 'enfermería', 'farmacia', 'fisioterapia', 'odontología', 'odontologia',
+      'anatomía', 'anatomia', 'fisiología', 'fisiologia', 'patología', 'patologia',
+      'biología', 'biologia', 'química', 'quimica', 'bioquímica', 'bioquimica',
+      'nutrición', 'nutricion', 'psicología', 'psicologia', 'terapia', 'pediatría', 'pediatria',
+      'ginecología', 'ginecologia', 'obstetricia', 'cardiología', 'cardiologia', 'salud pública',
+      'inmunología', 'inmunologia', 'virología', 'virologia', 'bacteriología', 'bacteriologia',
+      'histología', 'histologia', 'embriología', 'embriologia', 'genética', 'genetica',
+      'farmacología', 'farmacologia', 'semiología', 'semiologia', 'traumatología', 'traumatologia',
+      'neurología', 'neurologia', 'psiquiatría', 'psiquiatria', 'oncología', 'oncologia',
+      'pediatra', 'ginecologo', 'cardiologo', 'neurologo', 'oncologo', 'psiquiatra'
+    ];
+    
+    const textToSearch = ((topic || '') + ' ' + (groupName || '')).toLowerCase();
+    return keywords.some(keyword => textToSearch.includes(keyword));
+  }
+
+  function repairTruncatedJson(jsonStr) {
+    let str = jsonStr.trim();
+    try {
+      JSON.parse(str);
+      return str;
+    } catch (e) {
+      // Intentar reparar
+    }
+
+    let openQuotes = false;
+    let escaped = false;
+    let stack = [];
+
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        openQuotes = !openQuotes;
+        continue;
+      }
+      if (!openQuotes) {
+        if (char === '{' || char === '[') {
+          stack.push(char);
+        } else if (char === '}') {
+          if (stack.length && stack[stack.length - 1] === '{') {
+            stack.pop();
+          }
+        } else if (char === ']') {
+          if (stack.length && stack[stack.length - 1] === '[') {
+            stack.pop();
+          }
+        }
+      }
+    }
+
+    if (openQuotes) {
+      str += '"';
+    }
+
+    while (stack.length > 0) {
+      const openChar = stack.pop();
+      str = str.trim();
+      if (str.endsWith(',')) {
+        str = str.slice(0, -1);
+      }
+      if (openChar === '{') {
+        str += '}';
+      } else if (openChar === '[') {
+        str += ']';
+      }
+    }
+
+    return str;
+  }
+
+  async function getQuestionsBatch(topic, count, selectedFiles, excludeQuestions, batchIndex = 1, totalBatches = 1){
+    const hasFiles = selectedFiles && selectedFiles.length > 0;
+    const hasExclusions = excludeQuestions && excludeQuestions.length > 0;
+ 
+    let pdfImagePromptNote = "";
+    if (hasFiles) {
+      selectedFiles.forEach(f => {
+        if (f.pdfImages && f.pdfImages.length > 0) {
+          pdfImagePromptNote += `\nEl archivo de referencia "${f.name}" contiene ilustraciones o gráficos reales en las siguientes páginas. Si redactas una pregunta sobre los conceptos explicados en estas páginas que contenga una ilustración, DEBES usar exactamente la clave indicada en la propiedad "imageQuery" (la pregunta debe aludir directamente a la imagen):\n`;
+          f.pdfImages.forEach(img => {
+            pdfImagePromptNote += `- En la PÁGINA ${img.page}: clave de imagen a usar -> "pdfImage_${f.id}_P${img.page}"\n`;
+          });
+        }
+      });
+    }
+
+    const activeGroup = state.groups.find(g => g.id === state.activeGroupTab);
+    const groupName = activeGroup ? activeGroup.name : '';
+    const isHealth = isHealthSciences(topic, groupName);
+
+    let specializedPrompt = "";
+    if (isHealth) {
+      const textToSearch = ((topic || '') + ' ' + (groupName || '')).toLowerCase();
+      const hasPathology = textToSearch.includes('patolog') || textToSearch.includes('enfermedad');
+      const hasPharmacology = textToSearch.includes('farmac') || textToSearch.includes('medicament') || textToSearch.includes('tratamiento') || textToSearch.includes('fármac');
+      
+      let pathologyConstraint = "";
+      if (!hasPathology) {
+        pathologyConstraint += `\n- **RESTRICCIÓN DE DIAGNÓSTICO/PATOLOGÍA**: Dado que el tema del examen no alude directamente a "patologías" o "enfermedades", queda ESTRICTAMENTE PROHIBIDO generar preguntas o casos clínicos que involucren determinar o adivinar diagnósticos médicos, enfermedades o patologías. Céntrate exclusivamente en la fisiología o anatomía normal y los procesos estándar correspondientes al tema indicado.`;
+      }
+      
+      let pharmacologyConstraint = "";
+      if (!hasPharmacology) {
+        pharmacologyConstraint += "\n- **RESTRICCION DE FARMACOS/MEDICAMENTOS**: Dado que el tema del examen no alude directamente a \"fármacos\" o \"farmacología\", queda ESTRICTAMENTE PROHIBIDO introducir medicamentos, tratamientos farmacológicos, recetas médicas o mecanismos de acción de fármacos en los casos clínicos o en las opciones. Céntrate únicamente en los aspectos biológicos, anatómicos o fisiológicos puros del tema sin añadir elementos terapéuticos.";
+      }
+      
+      const exclusiveConstraint = `\n- **RESTRICCION DE ENFOQUE EXCLUSIVO**: No mezcles temas ajenos en los casos clínicos. Céntrate de forma estricta y única en el tema mencionado de forma explícita ("${topic}").${pathologyConstraint}${pharmacologyConstraint}`;
+
+      specializedPrompt = `\n\nIMPORTANTE - REGLA ESPECIAL PARA EXÁMENES DE CIENCIAS DE LA SALUD:
+Como este examen está relacionado con el área de ciencias de la salud, debes diseñar las preguntas con la siguiente distribución estricta de probabilidad:
+- El 65% de las preguntas generadas deben ser **Casos Clínicos** construidos de manera obligatoria y estructurada bajo el **Formato PICO-T**:
+  * **P – Paciente**: Edad, sexo, condición clínica inicial.
+  * **I – Intervención**: Proceso fisiológico o cambio.
+  * **C – Comparador**: Alternativa plausible o condición contraria.
+  * **O – Outcome**: Efecto esperado o variable crítica.
+  * **T – Tiempo/contexto**: Evolución clínica o entorno.
+- El 25% de las preguntas deben ser **Definiciones con Opciones Trampa**: preguntas conceptuales directas o teóricas de la materia donde las opciones de respuesta generen confusión al usuario porque son muy literales o aparentemente atingentes a la pregunta, pero solo una de ellas destaca de manera contundente por ser la más correcta, precisa e incuestionable.
+- El 10% restante de las preguntas deben ser **Definiciones Normales**: preguntas de conceptos o definiciones directas y estándar de la materia.
+
+EJEMPLOS DE ENTRENAMIENTO (ESTRUCTURA DE CASOS CLÍNICOS PICO-T ESTILO NBME):
+Usa como entrenamiento y referencia de diseño los siguientes ejemplos de casos clínicos del PDF para dar forma a tus preguntas, imitando su redacción, profundidad y rigor fisiológico:
+
+*Ejemplo 1 (Fisiología de Compartimentos/Ósmosis):*
+{
+  "question": "Un joven de 20 años corre un maratón bajo intenso calor y repone líquidos únicamente con agua, sin consumir electrolitos. Al finalizar, presenta cefalea, náuseas y confusión. Los análisis muestran hiponatremia significativa y osmolaridad plasmática baja. ¿Cuál es la alteración celular más probable en las neuronas de este paciente?",
+  "imageQuery": null,
+  "options": [
+    "El agua se mueve hacia el interior de las neuronas, produciendo edema cerebral por gradiente osmótico.",
+    "El cloruro sale de las neuronas mediante transporte activo primario para compensar la hiponatriemia.",
+    "El potasio entra masivamente a las neuronas mediante canales dependientes de voltaje.",
+    "La membrana neuronal se vuelve completamente impermeable al agua para evitar el cambio de volumen.",
+    "Se detiene la síntesis de ATP en las mitocondrias por la caída en la osmolaridad."
+  ],
+  "correct": 0
+}
+
+*Ejemplo 2 (Electrofisiología Celular):*
+{
+  "question": "Un paciente de 70 años con insuficiencia renal crónica avanzada presenta debilidad muscular progresiva. Los análisis revelan hiperpotasemia significativa. En la exploración, se observa que sus células musculares tienen un potencial de membrana en reposo de -70 mV (menos negativo de lo normal de -90 mV). ¿Cuál es el mecanismo fisiológico que mejor explica esta alteración en el potencial de reposo?",
+  "imageQuery": null,
+  "options": [
+    "Aumento de la actividad de la bomba Na+/K+ ATPasa que provoca hiperpolarización.",
+    "Disminución del gradiente de concentración de potasio que reduce la fuerza impulsora de salida de K+.",
+    "Aumento de la liberación de calcio del retículo sarcoplásmico hacia el citoplasma.",
+    "Bloqueo de los canales de fuga de potasio en la membrana de las fibras musculares.",
+    "Inactivación irreversible de todos los canales de sodio dependientes de voltaje."
+  ],
+  "correct": 1
+}
+
+*Ejemplo 3 (Fisiología Cardiovascular):*
+{
+  "question": "Una mujer de 54 años acude a consulta por cefalea. Su presión arterial, que era normal en su última visita, se encuentra en 160/110 mmHg. Los análisis muestran un aumento patológico en los niveles plasmáticos de angiotensina II (un potente vasoconstrictor). Según las relaciones de función cardíaca y vascular, ¿cuál es el efecto hemodinámico directo esperado antes de cualquier mecanismo de compensación?",
+  "imageQuery": null,
+  "options": [
+    "Desplazamiento de la curva de retorno venoso hacia la derecha por venoconstricción.",
+    "Aumento del gasto cardíaco debido a la estimulación adrenérgica beta-1 indirecta.",
+    "Disminución del retorno venoso y del gasto cardíaco debido al incremento en la poscarga (resistencia periférica).",
+    "Desplazamiento de la curva de función cardíaca hacia arriba por incremento de la contractilidad.",
+    "Aumento inmediato de la filtración glomerular debido a la dilatación de la arteriola aferente."
+  ],
+  "correct": 2
+}cia la derecha por venoconstricción.",
+    "Aumento del gasto cardíaco debido a la estimulación adrenérgica beta-1 indirecta.",
+    "Disminución del retorno venoso y del gasto cardíaco debido al incremento en la poscarga (resistencia periférica).",
+    "Desplazamiento de la curva de función cardíaca hacia arriba por incremento de la contractilidad."
+  ],
+  "correct": 2
+}
+
+Procura balancear las ${count} preguntas para que reflejen esta proporción de (65% casos clínicos, 25% definiciones con opciones trampa y 10% definiciones normales) de la manera más exacta posible en tu respuesta.${exclusiveConstraint}
+- **FUENTE DE REFERENCIA PRINCIPAL - FISIOLOGÍA LINDA S. COSTANZO (7ª EDICIÓN)**: Cuando se generen preguntas de fisiología, debes estructurar los enunciados, distractores, respuestas correctas y justificaciones basándote estrictamente en los principios explicados en esta obra (tales como transporte de membrana, potencial de acción, curvas de función cardíaca/vascular, bucles presión-volumen, autorregulación renal, equilibrio ácido-base, etc.), asegurando un rigor científico idéntico al del texto.
+- **DIVERSIFICACIÓN DE CASOS CLÍNICOS**: Diversifica ampliamente los escenarios clínicos (pacientes de diferentes edades, sexos, etnias; y en diversos entornos como atención primaria, urgencias hospitalarias, visitas domiciliarias o laboratorios clínicos) para dar dinamismo al examen.`;
+    } else {
+      specializedPrompt = `\n\nIMPORTANTE - REGLA ESPECIAL PARA EXÁMENES GENERALES (NO CIENCIAS DE LA SALUD):
+Como este examen NO es de ciencias de la salud, debes diseñar las preguntas con la siguiente distribución estricta de probabilidad:
+- El 55% de las preguntas generadas deben ser **Casos Prácticos** del tema indicado: preguntas basadas en un escenario práctico real o ficticio, un problema de la vida real, ejercicio situacional, dilema profesional, escenario de desarrollo de software, caso de estudio de negocios, o aplicación matemática concreta según corresponda a la materia. La pregunta debe requerir que el usuario analice la situación práctica para determinar la respuesta, comportamiento o solución correcta.
+- El 30% de las preguntas deben ser **Definiciones con Opciones Trampa**: preguntas conceptuales o teóricas del tema donde las opciones de respuesta generen confusión porque son muy parecidas o aparentemente correctas, pero solo una destaca de forma contundente por ser la más precisa e incuestionable.
+- El 15% restante de las preguntas deben ser **Definiciones Normales**: preguntas directas de conceptos, fórmulas o definiciones estándar del tema.
+Procura balancear las ${count} preguntas para que reflejen esta proporción de (55% casos prácticos, 30% definiciones con opciones trampa y 15% definiciones normales) de la manera más exacta posible en tu respuesta.
+ 
+- **PROHIBICIÓN ESTRICTA DE ENTRADA MÉDICA/HOSPITALARIA**: Como este examen NO pertenece a las ciencias de la salud, queda TOTAL Y COMPLETAMENTE PROHIBIDO que los casos prácticos, ejemplos, enunciados o justificaciones de respuesta hagan referencia a hospitales, salas de emergencia, pacientes, diagnósticos médicos, síntomas de enfermedades, medicamentos o cualquier temática clínica. El escenario del caso práctico debe ser 100% atingente al área de estudio real (por ejemplo: si es programación, usa contextos de empresas de software o depuración de código; si es negocios, usa análisis financiero o gestión de recursos humanos; si es ingeniería, usa construcción o física aplicada).
+- **DIVERSIFICACIÓN DE ESCENARIOS PRÁCTICOS**: Sé sumamente creativo. Varía las industrias y campos utilizados (comercios locales, multinacionales de manufactura, institutos educativos, proyectos de arte, laboratorios de física, campos de entrenamiento deportivo, agencias de publicidad). Evita repetir el mismo tipo de contexto o industria en preguntas consecutivas.`;
+    }
+ 
+    const difficultyLabels = {
+      'easy': 'Fácil 🌱',
+      'normal': 'Normal 🎯',
+      'hard': 'Difícil 🔥',
+      'extra-hard': 'Extra Difícil 💀'
+    };
+    const difficultyLevel = state.difficulty || 'normal';
+    const difficultyLabel = difficultyLabels[difficultyLevel];
+
+    let difficultyPrompt = "";
+    if (difficultyLevel === 'easy') {
+      difficultyPrompt = `
+- **NIVEL DE DIFICULTAD: FÁCIL**: Las preguntas deben estar dirigidas a alguien que tiene conocimientos básicos de cualquier tema. Concéntrate en conceptos fundamentales, sencillos y directos, con opciones incorrectas (distractores) fáciles de distinguir para quien posee nociones básicas, evitando complejidades innecesarias.`;
+    } else if (difficultyLevel === 'normal') {
+      difficultyPrompt = `
+- **NIVEL DE DIFICULTAD: NORMAL**: Las preguntas deben ser una mezcla equilibrada entre conocimientos básicos y profundos del tema. Combina conceptos teóricos de base con aplicaciones de razonamiento más detallado y avanzado, presentando distractores lógicos y plausibles.`;
+    } else if (difficultyLevel === 'hard') {
+      difficultyPrompt = `
+- **NIVEL DE DIFICULTAD: DIFÍCIL**: Las preguntas requieren obligatoriamente conocimientos profundos del tema. Formula escenarios complejos, interacciones detalladas, matices avanzados y razonamientos exhaustivos, con opciones incorrectas muy verosímiles y competitivas que exijan un análisis minucioso.`;
+    } else if (difficultyLevel === 'extra-hard') {
+      difficultyPrompt = `
+- **NIVEL DE DIFICULTAD: EXTRA DIFÍCIL**: Las preguntas son de nivel experto del tema. Evalúa detalles de nivel de especialidad, casos de borde sumamente complejos, interacciones fisiológicas/conceptuales de nivel avanzado y análisis de alta exigencia. Los distractores deben ser de nivel experto, sutiles y requerir un dominio y criterio experto absoluto para descartar.`;
+    }
+
+    const systemPrompt = `Eres un generador experto de exámenes académicos.${hasFiles
+      ? ' El usuario adjuntó textos de referencia: básate PRINCIPALMENTE en el contenido de esos textos para redactar las preguntas, ya que reflejan exactamente lo que el usuario quiere evaluar.'
+      : ' Investiga el tema indicado usando tu conocimiento para asegurar preguntas precisas y actualizadas.'
+    }
+ 
+    NIVEL DE DIFICULTAD REQUERIDO: El examen debe ser obligatoriamente de dificultad **${difficultyLabel.toUpperCase()}**.
+    REGLA DE ORO DE DIFICULTAD: Debes adaptar rigurosamente el nivel de complejidad conceptual, el lenguaje, la especificidad de los datos solicitados y la dificultad de los distractores (opciones incorrectas) al nivel seleccionado (${difficultyLabel.toUpperCase()}).
+    ${difficultyPrompt}
+ 
+    IMPORTANTE SOBRE LA CANTIDAD: debes generar EXACTAMENTE ${count} pregunta${count === 1 ? '' : 's'}, ni una más ni una menos. Antes de responder, cuenta los elementos del array que vas a devolver y verifica que sean exactamente ${count}. Si te faltan o te sobran, corrígelo antes de responder.
+ 
+    Cada pregunta debe tener únicamente 4 propiedades: "question" (el texto de la pregunta), "imageQuery" (la clave de imagen local o null), "options" (un array de exactamente 5 opciones de respuesta) y "correct" (el índice entero de la respuesta correcta de 0 a 4).
+    Queda ESTRICTAMENTE PROHIBIDO incluir cualquier propiedad como "explanation", "explanations" o justificaciones de respuesta en esta llamada. Esto es de suma importancia para optimizar la velocidad y el rendimiento de la API.
+ 
+    IDIOMA DE GENERACIÓN:
+    - Debes detectar automáticamente el idioma del tema (topic) del examen y de los materiales de referencia adjuntos.
+    - Si el tema o los materiales están en inglés, genera todas las preguntas y opciones de respuesta ("question" y "options") en inglés. Si están en español, en español.
+    - No importa si las instrucciones y comandos base del sistema están redactados en español; debes priorizar el idioma del tema (topic) y de los materiales de referencia para generar la respuesta.
+ 
+    REGLA DE VARIEDAD DE OPCIONES:
+    Queda estrictamente prohibido repetir el mismo set o grupo de opciones de respuesta en múltiples preguntas del mismo examen, a menos que sea extremadamente necesario para la evaluación de casos comparativos. Diseña opciones de respuesta diversas, variadas y redactadas de forma específica para el contexto particular de cada pregunta.
+    
+    ${hasExclusions ? `REGLA DE EVITAR REPETICIÓN DE PREGUNTAS ANTERIORES:
+Queda estrictamente prohibido repetir de forma tácita o exacta cualquiera de las siguientes preguntas de exámenes anteriores de este mismo tema:
+${excludeQuestions.map((q, idx) => `- "${q}"`).join('\n')}
+ 
+Para cumplir con esto:
+1. Si vas a generar preguntas de DEFINICIÓN o conceptos teóricos directos, NO debes usar ninguna pregunta de la lista anterior ni sus respuestas. Deben ser enunciados y conceptos completamente nuevos y distintos.
+2. Si vas a generar preguntas de CASOS CLÍNICOS o CASOS PRÁCTICOS, no repitas los enunciados ni respuestas de forma exacta. Puedes inspirarte o basarte en los escenarios de la lista anterior, pero variando obligatoriamente los valores, parámetros, constantes, nombres de personajes, contextos de problemas o la pregunta concreta formulada, para evitar repeticiones tácitas.` : ''}
+${specializedPrompt}
+ 
+IMPORTANTE SOBRE IMÁGENES/ILUSTRACIONES (REGLA DE USO EXCLUSIVO LOCAL):
+- Solo tienes permitido generar preguntas con imágenes o gráficos si el usuario ha adjuntado archivos de referencia que contengan ilustraciones reales (listadas abajo con el formato "pdfImage_...").
+- Queda totalmente prohibido inventar o buscar imágenes en la web o colocar cualquier término de búsqueda en "imageQuery".
+- Si abajo se listan imágenes disponibles en los archivos del usuario, utilízalas asignando exactamente su identificador en el campo "imageQuery" (ej: "pdfImage_XYZ_P3"). Procura alternar para que la mitad de las preguntas de esa sección usen las imágenes locales y la otra mitad use null.
+- Si no hay ninguna imagen disponible de archivos listada abajo, la propiedad "imageQuery" DEBE ser estrictamente null para todas las preguntas del examen sin excepción.
+ 
+1. LAS PREGUNTAS DEBEN HACER REFERENCIA DIRECTA AL GRÁFICO:
+- Cuando uses una clave de imagen local en "imageQuery", la pregunta ("question") DEBE estar redactado haciendo referencia explícita al gráfico (ej. "Según el gráfico de la ilustración mostrada, ¿qué significa...").
+ 
+Ejemplo de formato JSON esperado:
+{
+  "preguntas": [
+    {
+      "question": "De acuerdo con el gráfico de la ilustración mostrada, ¿cuál de las siguientes opciones describe correctamente la anomalía en el rendimiento?",
+      "imageQuery": "pdfImage_XYZ_P3",
+      "options": ["Una caída abrupta", "Un incremento lineal", "Estancamiento", "Crecimiento sostenido", "Fluctuaciones cíclicas"],
+      "correct": 0
+    },
+    {
+      "question": "Cuál es la capital de Francia?",
+      "imageQuery": null,
+      "options": ["Londres", "París", "Berlín", "Madrid", "Roma"],
+      "correct": 1
+    }
+  ]
+}
+ 
+Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown, sin comentarios.`;
+ 
+    const batchVariationNote = totalBatches > 1
+      ? `\nNOTA DE VARIACIÓN DE LOTE: Este es el sub-lote ${batchIndex} de un total de ${totalBatches} sub-lotes que se ejecutan en paralelo para armar el mismo examen. Para garantizar variedad de contenidos y evitar preguntas duplicadas, enfoca este sub-lote en aspectos y subtemas específicos y distintos del tema general.`
+      : "";
+ 
+    const userText = hasFiles
+      ? `Material de referencia:\n` + selectedFiles.map(f => `--- Archivo: ${f.name} ---\n${f.content}\n--- Fin de ${f.name} ---`).join('\n\n') + `\n\nTema del examen: ${topic}\n${pdfImagePromptNote}\nGenera exactamente ${count} preguntas sin explicaciones en base a los textos provistos arriba.${batchVariationNote}\n\nRECUERDA: La dificultad del examen debe ser obligatoriamente de nivel **${difficultyLabel.toUpperCase()}**. Adapta la complejidad de las preguntas y distractores a este nivel.`
+      : `Tema del examen: ${topic}\nGenera exactamente ${count} preguntas sin explicaciones sobre este tema.${batchVariationNote}\n\nRECUERDA: La dificultad del examen debe ser obligatoriamente de nivel **${difficultyLabel.toUpperCase()}**. Adapta la complejidad de las preguntas y distractores a este nivel.`;
+
+    const apiBody = {
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userText }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+      max_tokens: 4000
+    };
+
+    const headers = {
+      "Content-Type": "application/json"
+    };
+ 
+    let attempts = 0;
+    const maxAttempts = 3;
+    let lastError = null;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify(apiBody)
+        });
+     
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || ('La API respondió con un error (' + response.status + ')'));
+        }
+     
+        const data = await response.json();
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          throw new Error('Formato de respuesta de DeepSeek desconocido.');
+        }
+        const messageContent = data.choices[0].message.content;
+     
+        let cleaned = messageContent.trim();
+        cleaned = cleaned.replace(/```json/gi, '').replace(/```/g, '').trim();
+     
+        // Reparar JSON truncado si fuera necesario
+        const repaired = repairTruncatedJson(cleaned);
+        
+        let parsed;
+        try {
+          parsed = JSON.parse(repaired);
+        } catch (e) {
+          console.error('Error parseando JSON incluso después de reparar:', repaired);
+          throw new Error('No se pudo interpretar la respuesta de la IA como JSON válido.');
+        }
+     
+        const questions = parsed.preguntas || parsed;
+        if (!Array.isArray(questions)) {
+          throw new Error('La respuesta de la IA no contiene una lista de preguntas válida.');
+        }
+    
+        const validQuestions = questions.filter(q =>
+          q && typeof q.question === 'string' &&
+          Array.isArray(q.options) && q.options.length === 5 &&
+          typeof q.correct === 'number'
+        );
+
+        if (validQuestions.length > 0) {
+          return validQuestions;
+        } else {
+          throw new Error('No se generaron preguntas válidas tras filtrar.');
+        }
+      } catch (error) {
+        console.warn(`Intento ${attempts} de getQuestionsBatch falló:`, error);
+        lastError = error;
+        if (attempts < maxAttempts) {
+          // Esperar 1.5 segundos antes de reintentar
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+    }
+    throw lastError || new Error('No se pudieron obtener preguntas válidas de la IA.');
+  }
+ 
+  function startExam(){
+    showScreen('exam');
+    renderQuestion();
+    if(state.timerInterval) clearInterval(state.timerInterval);
+    updateTimerDisplay();
+    state.timerInterval = setInterval(() => {
+      state.timeLeft--;
+      updateTimerDisplay();
+      if(state.timeLeft <= 0){
+        clearInterval(state.timerInterval);
+        showCustomAlert('¡Tiempo Agotado!', 'El tiempo límite del examen ha finalizado. Se mostrarán tus resultados.', () => {
+          finishExam();
+        });
+      }
+    }, 1000);
+  }
+ 
+  function updateTimerDisplay(){
+    const h = Math.floor(state.timeLeft / 3600);
+    const m = Math.floor((state.timeLeft % 3600) / 60);
+    const s = state.timeLeft % 60;
+    els.timerClock.textContent = '⏱ ' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    els.timerClock.classList.toggle('warning', state.timeLeft <= 30);
+  }
+ 
+  function tryLoadingImages(urls, containerElement) {
+    if (!urls || urls.length === 0) {
+      containerElement.innerHTML = `<p style="color:var(--ink-soft); font-size:0.8rem; font-style:italic;">No se pudo cargar la ilustración</p>`;
+      return;
+    }
+    const img = document.createElement('img');
+    img.src = urls[0];
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '220px';
+    img.style.borderRadius = '8px';
+    img.style.border = '1px solid var(--paper-line)';
+    img.style.boxShadow = '0 4px 10px rgba(0,0,0,0.1)';
+    
+    img.onerror = () => {
+      // Intentar cargar la siguiente URL de imagen en el array (fallback)
+      tryLoadingImages(urls.slice(1), containerElement);
+    };
+    
+    img.onload = () => {
+      containerElement.innerHTML = '';
+      containerElement.appendChild(img);
+    };
+  }
+
+  function renderQuestion(){
+    const q = state.questions[state.current];
+    const total = state.questions.length;
+    els.progressLabel.textContent = `Pregunta ${state.current + 1} de ${total}`;
+    els.progressFill.style.width = ((state.current) / total * 100) + '%';
+ 
+    els.questionText.innerHTML = `<span class="question-number-tag">${state.current + 1}.</span>${escapeHtml(q.question)}`;
+ 
+    // Handle dynamic scraped images from web or local PDF if present
+    const imageContainerId = 'questionImageContainer';
+    let imageDiv = document.getElementById(imageContainerId);
+    
+    if (q.imageQuery) {
+      if (!imageDiv) {
+        imageDiv = document.createElement('div');
+        imageDiv.id = imageContainerId;
+        imageDiv.style.margin = '16px 0';
+        imageDiv.style.display = 'flex';
+        imageDiv.style.justifyContent = 'center';
+        imageDiv.style.alignItems = 'center';
+        imageDiv.style.minHeight = '100px';
+      }
+      
+      // ONLY load if we haven't loaded the image for this specific query yet!
+      // This prevents image reloading and flashing when selecting answers.
+      if (imageDiv.getAttribute('data-loaded-query') !== q.imageQuery) {
+        imageDiv.setAttribute('data-loaded-query', q.imageQuery);
+        
+        if (q.imageQuery.startsWith('pdfImage_')) {
+          // Local extracted PDF image
+          const parts = q.imageQuery.split('_');
+          const fileId = parts[1];
+          const pagePart = parts[2];
+          const pageNum = parseInt(pagePart.substring(1));
+          
+          const file = state.availableFiles.find(f => f.id === fileId);
+          const imgRecord = file && file.pdfImages ? file.pdfImages.find(img => img.page === pageNum) : null;
+          
+          if (imgRecord && imgRecord.dataUrl) {
+            imageDiv.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = imgRecord.dataUrl;
+            img.style.maxWidth = '100%';
+            img.style.maxHeight = '240px';
+            img.style.borderRadius = '8px';
+            img.style.border = '1px solid var(--paper-line)';
+            img.style.boxShadow = '0 4px 10px rgba(0,0,0,0.1)';
+            imageDiv.appendChild(img);
+          } else {
+            imageDiv.innerHTML = `<p style="color:var(--ink-soft); font-size:0.8rem; font-style:italic;">No se pudo extraer la ilustración del material de referencia</p>`;
+          }
+        } else {
+          imageDiv.innerHTML = '';
+        }
+      }
+      
+      // Ensure the image container is in the correct DOM position
+      if (!imageDiv.parentNode) {
+        els.questionText.parentNode.insertBefore(imageDiv, els.questionText.nextSibling);
+      }
+    } else {
+      if (imageDiv && imageDiv.parentNode) {
+        imageDiv.parentNode.removeChild(imageDiv);
+      }
+    }
+ 
+    els.optionsList.innerHTML = '';
+    const letters = ['A','B','C','D','E'];
+    q.options.forEach((opt, idx) => {
+      const div = document.createElement('div');
+      div.className = 'option' + (state.answers[state.current] === idx ? ' selected' : '');
+      div.setAttribute('role','radio');
+      div.setAttribute('tabindex','0');
+      div.setAttribute('aria-checked', state.answers[state.current] === idx ? 'true' : 'false');
+      div.innerHTML = `<span class="bubble">${letters[idx]}</span><span>${escapeHtml(opt)}</span>`;
+      div.addEventListener('click', () => selectAnswer(idx));
+      div.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); selectAnswer(idx); } });
+      els.optionsList.appendChild(div);
+    });
+ 
+    els.btnPrev.disabled = state.current === 0;
+    els.btnPrev.style.opacity = state.current === 0 ? '.4' : '1';
+    els.btnNext.classList.toggle('hidden', state.current === total - 1);
+  }
+ 
+  function selectAnswer(idx){
+    state.answers[state.current] = idx;
+    renderQuestion();
+  }
+ 
+  els.btnPrev.addEventListener('click', () => {
+    if(state.current > 0){ state.current--; renderQuestion(); }
+  });
+  els.btnNext.addEventListener('click', () => {
+    if(state.current < state.questions.length - 1){ state.current++; renderQuestion(); }
+  });
+  els.btnFinish.addEventListener('click', () => {
+    finishExam();
+  });
+ 
+  function computeResult(questions, answers){
+    let correctCount = 0;
+    questions.forEach((q, i) => { if(answers[i] === q.correct) correctCount++; });
+    const total = questions.length;
+    const pct = total ? correctCount / total : 0;
+    const passed = pct >= 0.75;
+    return { correctCount, total, pct, passed };
+  }
+ 
+  function renderStampAndScore(stampEl, scoreEl, result){
+    stampEl.textContent = result.passed ? 'APROBADO' : 'REPROBADO';
+    stampEl.style.color = result.passed ? '#2f6b3a' : 'var(--pen-red)';
+    stampEl.style.borderColor = result.passed ? '#2f6b3a' : 'var(--pen-red)';
+    scoreEl.textContent = `${result.correctCount} / ${result.total} correctas (${Math.round(result.pct * 100)}%)`;
+  }
+ 
+  function cleanExplanationText(text) {
+    if (!text) return '';
+    let cleaned = text.trim();
+    // Limpiar primero etiquetas de estado (correcto/incorrecto)
+    cleaned = cleaned.replace(/^\s*(correcto|incorrecto|correct|incorrect|es correcto|es incorrecto)\s*[\.\,:\-]?\s*/i, '');
+    // Limpiar prefijos de letra de opción como "a, ", "b: ", "c. ", "A) ", etc. (hasta opción E)
+    cleaned = cleaned.replace(/^\s*[a-e]\s*[\,\.\:\-\)]\s*/i, '');
+    return cleaned;
+  }
+
+  function renderReview(container, questions, answers){
+    container.innerHTML = '';
+    const letters = ['A','B','C','D','E'];
+    const isEn = questions && questions.length > 0 && /\b(the|is|of|and|what|which|with|in|to|for)\b/i.test(questions[0].question || '');
+    
+    const txtJustify = isEn ? 'Justification of options:' : 'Justificación de las opciones:';
+    const txtCorrect = isEn ? 'Correct' : 'Correcta';
+    const txtIncorrect = isEn ? 'Incorrect' : 'Incorrecta';
+    const txtConcept = isEn ? 'Key concept:' : 'Concepto clave:';
+    const txtLoading = isEn ? '⏳ Writing didactic explanations...' : '⏳ Redactando explicaciones didácticas...';
+
+    questions.forEach((q, i) => {
+      const userIdx = answers[i];
+      const isCorrect = userIdx === q.correct;
+
+      let explanationHtml = '';
+      if (q.explanations && Array.isArray(q.explanations) && q.explanations.length === q.options.length) {
+        let optionsHtml = '';
+        q.options.forEach((opt, idx) => {
+          const letter = letters[idx] || String.fromCharCode(65 + idx);
+          const isCorrectOpt = q.correct === idx;
+          optionsHtml += `<div style="margin-bottom: 6px;"><b>${letter})</b> ${escapeHtml(opt)} — <b style="color: ${isCorrectOpt ? '#48bb78' : '#fc8181'};">(${isCorrectOpt ? txtCorrect : txtIncorrect})</b>: ${escapeHtml(cleanExplanationText(q.explanations[idx]))}</div>`;
+        });
+
+        explanationHtml = `
+          <div class="review-explain" style="margin-top: 12px; background-color: var(--chalk-green-dark); padding: 12px; border-radius: 6px; border-left: 4px solid var(--chalk-yellow); color: var(--chalk-white); font-size: 0.9rem; line-height: 1.4;">
+            <div style="font-weight: bold; margin-bottom: 8px; color: var(--chalk-yellow);">${txtJustify}</div>
+            ${optionsHtml}
+            ${q.explanation ? `<div style="margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 6px; font-style: italic; opacity: 0.9;"><b>${txtConcept}</b> ${escapeHtml(q.explanation)}</div>` : ''}
+          </div>
+        `;
+      } else {
+        explanationHtml = `
+          <div class="review-explain" style="margin-top: 12px; background-color: var(--chalk-green-dark); padding: 12px; border-radius: 6px; border-left: 4px solid var(--chalk-yellow); color: var(--chalk-white); font-size: 0.95rem; line-height: 1.4; opacity: 0.85; font-style: italic; border: 1px dashed rgba(255,255,255,0.3);">
+            ${txtLoading}
+          </div>
+        `;
+      }
+
+      const div = document.createElement('div');
+      div.className = 'review-item';
+      div.innerHTML = `
+        <div class="review-q"><span class="question-number-tag">${i+1}.</span>${escapeHtml(q.question)}</div>
+        ${q.imageQuery ? `<div class="review-image-box" data-query="${escapeHtml(q.imageQuery)}" style="margin:10px 0; display:flex; justify-content:center; align-items:center; min-height:80px; overflow:hidden;">
+          <span style="color:var(--ink-soft); font-size:0.8rem; font-style:italic;">Cargando ilustración...</span>
+        </div>` : ''}
+        ${userIdx !== null && userIdx !== undefined ? `<div class="review-answer ${isCorrect ? 'correct' : 'incorrect'}"><span class="mark">${isCorrect ? '✓' : '✗'}</span>Tu respuesta: ${letters[userIdx]}) ${escapeHtml(q.options[userIdx])}</div>` : `<div class="review-answer incorrect"><span class="mark">✗</span>No completada</div>`}
+        ${!isCorrect ? `<div class="review-answer correct"><span class="mark">✓</span>Correcta: ${letters[q.correct]}) ${escapeHtml(q.options[q.correct])}</div>` : ''}
+        ${explanationHtml}
+      `;
+      container.appendChild(div);
+    });
+
+    // Cargar las imágenes locales de la revisión (extraídas del PDF)
+    container.querySelectorAll('.review-image-box').forEach(box => {
+      const query = box.getAttribute('data-query');
+      if (query.startsWith('pdfImage_')) {
+        const parts = query.split('_');
+        const fileId = parts[1];
+        const pagePart = parts[2];
+        const pageNum = parseInt(pagePart.substring(1));
+        
+        const file = state.availableFiles.find(f => f.id === fileId);
+        const imgRecord = file && file.pdfImages ? file.pdfImages.find(img => img.page === pageNum) : null;
+        if (imgRecord && imgRecord.dataUrl) {
+          box.innerHTML = '';
+          const img = document.createElement('img');
+          img.src = imgRecord.dataUrl;
+          img.style.maxWidth = '100%';
+          img.style.maxHeight = '220px';
+          img.style.borderRadius = '8px';
+          img.style.border = '1px solid var(--paper-line)';
+          box.appendChild(img);
+        } else {
+          box.innerHTML = '';
+        }
+      } else {
+        box.innerHTML = '';
+      }
+    });
+  }
+ 
+  async function finishExam(){
+    if(state.timerInterval) clearInterval(state.timerInterval);
+    const result = computeResult(state.questions, state.answers);
+ 
+    renderStampAndScore(els.stampText, els.scoreNumber, result);
+    renderReview(els.reviewList, state.questions, state.answers);
+ 
+    const newEntry = {
+      id: crypto.randomUUID(),
+      topic: state.currentTopic || 'Sin tema',
+      date: new Date().toISOString(),
+      questions: state.questions,
+      answers: state.answers.slice(),
+      result,
+      groupId: (state.activeGroupTab !== 'all' && state.activeGroupTab !== 'ungrouped') ? state.activeGroupTab : null,
+      difficulty: state.difficulty
+    };
+
+    // Agregar de inmediato al historial y caché local para evitar pérdida de datos si la red falla
+    state.examHistory.unshift(newEntry);
+    saveStateToCache();
+    populateResultGroupSelect(newEntry);
+
+    try {
+      const res = await fetch('/api/exams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEntry)
+      });
+      if (!res.ok) throw new Error('Error al guardar examen');
+    } catch(e) {
+      console.error(e);
+      setError('No se pudo sincronizar el examen con el servidor. Se guardó localmente en la caché.');
+    }
+ 
+    showScreen('results');
+  }
+ 
+  function populateResultGroupSelect(entry){
+    els.resultGroupSelect.innerHTML = '';
+    const optNone = document.createElement('option');
+    optNone.value = '';
+    optNone.textContent = 'Sin grupo';
+    els.resultGroupSelect.appendChild(optNone);
+ 
+    state.groups.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.name;
+      els.resultGroupSelect.appendChild(opt);
+    });
+ 
+    const optNew = document.createElement('option');
+    optNew.value = '__new__';
+    optNew.textContent = '+ Crear nuevo grupo…';
+    els.resultGroupSelect.appendChild(optNew);
+ 
+    els.resultGroupSelect.value = entry.groupId || '';
+ 
+    els.resultGroupSelect.onchange = async () => {
+      const val = els.resultGroupSelect.value;
+      if(val === '__new__'){
+        openGroupModal('Crear grupo', '', async (name) => {
+          const newGroup = { id: crypto.randomUUID(), name };
+          try {
+            const resGroup = await fetch('/api/groups', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newGroup)
+            });
+            if (!resGroup.ok) throw new Error('Error al crear grupo');
+            state.groups.push(newGroup);
+            entry.groupId = newGroup.id;
+            saveStateToCache();
+            
+            const resExam = await fetch(`/api/exams/${entry.id}/group`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groupId: newGroup.id })
+            });
+            if (!resExam.ok) throw new Error('Error al asociar grupo');
+            populateResultGroupSelect(entry);
+          } catch(e) {
+            console.error(e);
+            setError('Error al crear grupo o asociar el examen.');
+          }
+        }, () => {
+          els.resultGroupSelect.value = entry.groupId || '';
+        });
+      } else {
+        try {
+          entry.groupId = val || null;
+          saveStateToCache();
+          const res = await fetch(`/api/exams/${entry.id}/group`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupId: val || null })
+          });
+          if (!res.ok) throw new Error('Error al asociar grupo');
+        } catch(e) {
+          console.error(e);
+          setError('No se pudo asociar el examen al grupo.');
+        }
+      }
+    };
+  }
+ 
+  els.btnNewExam.addEventListener('click', () => {
+    setError(null);
+    showScreen('config');
+    renderLibraryLists();
+  });
+ 
+  // ---- History ----
+  function formatDate(d){
+    return d.toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' }) + ' · ' +
+      d.toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit' });
+  }
+ 
+  function renderGroupTabs(){
+    els.groupCardsContainer.innerHTML = '';
+  
+    const getExamsCountLabel = (count) => {
+      if (count === 0) return 'Ningún examen';
+      if (count === 1) return '1 examen';
+      return `${count} exámenes`;
+    };
+  
+    const makeCard = (id, label, icon, count, closable) => {
+      const card = document.createElement('div');
+      card.className = 'group-card' + (state.activeGroupTab === id ? ' active' : '');
+      
+      const content = document.createElement('div');
+      content.style.display = 'flex';
+      content.style.flexDirection = 'column';
+      content.style.height = '100%';
+      content.innerHTML = `
+        <div class="group-card-icon">${icon}</div>
+        <div class="group-card-title">${escapeHtml(label)}</div>
+        <div class="group-card-count">${getExamsCountLabel(count)}</div>
+      `;
+      card.appendChild(content);
+  
+      if(closable){
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'group-card-actions';
+  
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'group-card-action-btn edit';
+        editBtn.innerHTML = '✎';
+        editBtn.title = 'Renombrar grupo';
+        editBtn.addEventListener('click', (e) => { e.stopPropagation(); renameGroup(id); });
+  
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'group-card-action-btn delete';
+        delBtn.innerHTML = '×';
+        delBtn.title = 'Borrar grupo';
+        delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteGroup(id); });
+  
+        actionsDiv.appendChild(editBtn);
+        actionsDiv.appendChild(delBtn);
+        card.appendChild(actionsDiv);
+      }
+      
+      card.addEventListener('click', () => {
+        state.activeGroupTab = id;
+        
+        // Update group detail screen title
+        if (id === 'all') {
+          els.groupExamsTitle.textContent = '📚 Todos los exámenes';
+        } else {
+          els.groupExamsTitle.textContent = `📁 ${label}`;
+        }
+        
+        renderHistoryList();
+        showScreen('groupExams');
+      });
+      return card;
+    };
+  
+    const totalAll = state.examHistory.length;
+    els.groupCardsContainer.appendChild(makeCard('all', 'Todos los exámenes', '📚', totalAll, false));
+  
+    state.groups.forEach(g => {
+      const count = state.examHistory.filter(e => e.groupId === g.id).length;
+      els.groupCardsContainer.appendChild(makeCard(g.id, g.name, '📁', count, true));
+    });
+  
+  }
+ 
+  // ---- Group modal (crear / renombrar) ----
+  let modalSaveCb = null;
+  let modalCancelCb = null;
+ 
+  function openGroupModal(title, initialValue, onSave, onCancel){
+    els.groupModalTitle.textContent = title;
+    els.groupModalInput.value = initialValue || '';
+    modalSaveCb = onSave;
+    modalCancelCb = onCancel || null;
+    els.modalOverlay.classList.remove('hidden');
+    setTimeout(() => { els.groupModalInput.focus(); els.groupModalInput.select(); }, 30);
+  }
+ 
+  function closeGroupModal(cancelled){
+    els.modalOverlay.classList.add('hidden');
+    if(cancelled && modalCancelCb) modalCancelCb();
+    modalSaveCb = null;
+    modalCancelCb = null;
+  }
+  
+  // ---- Confirmation modal ----
+  let confirmResolver = null;
+
+  function showConfirmModal(title, text) {
+    return new Promise((resolve) => {
+      els.confirmModalTitle.textContent = title;
+      els.confirmModalText.textContent = text;
+      els.confirmModalOverlay.classList.remove('hidden');
+      confirmResolver = resolve;
+    });
+  }
+
+  els.btnConfirmCancel.addEventListener('click', () => {
+    els.confirmModalOverlay.classList.add('hidden');
+    if (confirmResolver) {
+      confirmResolver(false);
+      confirmResolver = null;
+    }
+  });
+
+  els.btnConfirmAccept.addEventListener('click', () => {
+    els.confirmModalOverlay.classList.add('hidden');
+    if (confirmResolver) {
+      confirmResolver(true);
+      confirmResolver = null;
+    }
+  });
+ 
+  els.btnModalSave.addEventListener('click', () => {
+    const val = els.groupModalInput.value.trim();
+    if(!val){
+      els.groupModalInput.focus();
+      return;
+    }
+    const cb = modalSaveCb;
+    els.modalOverlay.classList.add('hidden');
+    modalSaveCb = null;
+    modalCancelCb = null;
+    if(cb) cb(val);
+  });
+  els.btnModalCancel.addEventListener('click', () => closeGroupModal(true));
+  els.modalOverlay.addEventListener('click', (e) => {
+    if(e.target === els.modalOverlay) closeGroupModal(true);
+  });
+  els.groupModalInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){ e.preventDefault(); els.btnModalSave.click(); }
+    if(e.key === 'Escape'){ e.preventDefault(); closeGroupModal(true); }
+  });
+ 
+  async function addGroup(){
+    openGroupModal('Crear grupo', '', async (name) => {
+      const newGroup = { id: crypto.randomUUID(), name };
+      state.groups.push(newGroup);
+      state.activeGroupTab = newGroup.id;
+      saveStateToCache();
+      renderGroupTabs();
+      renderHistoryList();
+
+      try {
+        const res = await fetch('/api/groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newGroup)
+        });
+        if (!res.ok) throw new Error('Error al registrar grupo');
+      } catch(e) {
+        console.error(e);
+        setError('No se pudo sincronizar el nuevo grupo con el servidor. Se guardó localmente en la caché.');
+      }
+    });
+  }
+ 
+  async function renameGroup(id){
+    const g = state.groups.find(x => x.id === id);
+    if(!g) return;
+    openGroupModal('Renombrar grupo', g.name, async (name) => {
+      const oldName = g.name;
+      g.name = name;
+      saveStateToCache();
+      renderGroupTabs();
+      renderHistoryList();
+
+      try {
+        const res = await fetch(`/api/groups/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        if (!res.ok) throw new Error('Error al renombrar grupo');
+      } catch(e) {
+        console.error(e);
+        g.name = oldName;
+        saveStateToCache();
+        renderGroupTabs();
+        renderHistoryList();
+        setError('No se pudo sincronizar el cambio de nombre con el servidor. Se revirtió el cambio.');
+      }
+    });
+  }
+ 
+  async function deleteGroup(id){
+    const confirmed = await showConfirmModal('Eliminar grupo', '¿Borrar este grupo? Los exámenes que contiene pasarán a "Sin grupo".');
+    if(!confirmed) return;
+
+    const oldGroups = state.groups.slice();
+    const oldHistory = JSON.parse(JSON.stringify(state.examHistory));
+
+    state.groups = state.groups.filter(g => g.id !== id);
+    state.examHistory.forEach(e => { if(e.groupId === id) e.groupId = null; });
+    const oldActiveTab = state.activeGroupTab;
+    if(state.activeGroupTab === id) state.activeGroupTab = 'all';
+    saveStateToCache();
+    renderGroupTabs();
+    renderHistoryList();
+
+    try {
+      const res = await fetch(`/api/groups/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar grupo');
+    } catch(e) {
+      console.error(e);
+      state.groups = oldGroups;
+      state.examHistory = oldHistory;
+      state.activeGroupTab = oldActiveTab;
+      saveStateToCache();
+      renderGroupTabs();
+      renderHistoryList();
+      setError('No se pudo eliminar el grupo del servidor. Se revirtieron los cambios.');
+    }
+  }
+ 
+  function renderHistoryList(){
+    els.historyList.innerHTML = '';
+  
+    let entries = state.examHistory;
+    if(state.activeGroupTab === 'ungrouped'){
+      entries = entries.filter(e => !e.groupId);
+    } else if(state.activeGroupTab !== 'all'){
+      entries = entries.filter(e => e.groupId === state.activeGroupTab);
+    }
+  
+    // Calculate stats for the current group
+    if (state.activeGroupTab !== 'all') {
+      els.groupExamsStats.classList.remove('hidden');
+      const count = entries.length;
+      let avgPct = 0;
+      if (count > 0) {
+        let totalPct = 0;
+        entries.forEach(e => {
+          const pct = e.result.pct !== undefined ? e.result.pct : (e.result.correctCount / e.result.total);
+          totalPct += pct * 100;
+        });
+        avgPct = (totalPct / count).toFixed(1);
+      }
+      els.groupExamsStats.innerHTML = `📊 <b>${count}</b> ${count === 1 ? 'examen' : 'exámenes'} en este grupo | Calificación promedio: <b>${avgPct}%</b>`;
+    } else {
+      els.groupExamsStats.classList.add('hidden');
+    }
+  
+    if (entries.length === 0) {
+      els.historyEmpty.classList.remove('hidden');
+      els.historyList.classList.add('hidden');
+      els.btnClearHistory.classList.add('hidden');
+      return;
+    } else {
+      els.historyEmpty.classList.add('hidden');
+      els.historyList.classList.remove('hidden');
+      els.btnClearHistory.classList.remove('hidden');
+    }
+
+    const diffLabels = {
+      'easy': '🌱 Fácil',
+      'normal': '🎯 Normal',
+      'hard': '🔥 Difícil',
+      'extra-hard': '💀 Extra Difícil'
+    };
+
+    entries.forEach(e => {
+      const item = document.createElement('div');
+      item.className = 'history-item ' + (e.result.passed ? 'pass' : 'fail');
+      item.innerHTML = `
+        <div class="hi-main">
+          <div class="hi-topic">${escapeHtml(e.topic)}</div>
+          <div class="hi-date">${formatDate(new Date(e.date))}</div>
+          ${e.groupId ? `<div class="hi-group-tag">${escapeHtml(state.groups.find(g => g.id === e.groupId)?.name || 'Sin grupo')}</div>` : ''}
+          <div class="hi-diff-tag">${diffLabels[e.difficulty] || '🎯 Normal'}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap: 12px;">
+          <div class="hi-badge">${e.result.correctCount} / ${e.result.total}</div>
+          <button type="button" class="btn-download-exam" title="Descargar examen en PDF" style="background:none; border:none; color:var(--chalk-yellow); font-size:1.15rem; cursor:pointer; padding: 6px; border-radius:4px; transition: background-color 0.15s ease;">📥</button>
+          <button type="button" class="btn-delete-exam" title="Eliminar examen" style="background:none; border:none; color:var(--pen-red); font-size:1.15rem; cursor:pointer; padding: 6px; border-radius:4px; transition: background-color 0.15s ease;">🗑</button>
+          <div class="hi-arrow">❯</div>
+        </div>
+      `;
+      
+      item.querySelector('.btn-download-exam').addEventListener('click', (ev) => {
+        ev.stopPropagation(); // Evitar abrir los detalles del examen
+        downloadExamPdf(e.topic, e.result.correctCount, e.result.total, e.questions, e.answers, e.difficulty);
+      });
+
+      item.querySelector('.btn-delete-exam').addEventListener('click', (ev) => {
+        ev.stopPropagation(); // Avoid triggering exam detail
+        deleteExamDirectly(e.id);
+      });
+      
+      item.addEventListener('click', () => showHistoryDetail(e));
+      els.historyList.appendChild(item);
+    });
+  }
+
+  async function deleteExamDirectly(examId) {
+    const confirmed = await showConfirmModal('Eliminar examen', '¿Estás seguro de eliminar este examen de tu historial? Esta acción es permanente.');
+    if (!confirmed) return;
+    
+    const oldHistory = state.examHistory.slice();
+    state.examHistory = state.examHistory.filter(x => x.id !== examId);
+    saveStateToCache();
+    renderHistoryList();
+
+    try {
+      const res = await fetch(`/api/exams/${examId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar de la base de datos');
+    } catch(err) {
+      console.error(err);
+      state.examHistory = oldHistory;
+      saveStateToCache();
+      renderHistoryList();
+      setError('No se pudo sincronizar la eliminación con el servidor. Se revirtió el cambio.');
+    }
+  }
+
+  function showHistoryDetail(entry){
+    state.activeHistoryEntry = entry;
+    const diffLabels = {
+      'easy': '🌱 Fácil',
+      'normal': '🎯 Normal',
+      'hard': '🔥 Difícil',
+      'extra-hard': '💀 Extra Difícil'
+    };
+    const diffText = diffLabels[entry.difficulty] || '🎯 Normal';
+    els.detailTopic.textContent = `${entry.topic} | Dificultad: ${diffText}`;
+    renderStampAndScore(els.detailStamp, els.detailScore, entry.result);
+    renderReview(els.detailReviewList, entry.questions, entry.answers);
+    populateDetailGroupSelect(entry);
+    showScreen('historyDetail');
+  }
+
+  function populateDetailGroupSelect(entry){
+    els.detailGroupSelect.innerHTML = '';
+    const optNone = document.createElement('option');
+    optNone.value = '';
+    optNone.textContent = 'Sin grupo';
+    els.detailGroupSelect.appendChild(optNone);
+ 
+    state.groups.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.name;
+      els.detailGroupSelect.appendChild(opt);
+    });
+ 
+    const optNew = document.createElement('option');
+    optNew.value = '__new__';
+    optNew.textContent = '+ Crear nuevo grupo…';
+    els.detailGroupSelect.appendChild(optNew);
+ 
+    els.detailGroupSelect.value = entry.groupId || '';
+ 
+    els.detailGroupSelect.onchange = async () => {
+      const val = els.detailGroupSelect.value;
+      if(val === '__new__'){
+        openGroupModal('Crear grupo', '', async (name) => {
+          const newGroup = { id: crypto.randomUUID(), name };
+          try {
+            const resGroup = await fetch('/api/groups', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newGroup)
+            });
+            if (!resGroup.ok) throw new Error('Error al crear grupo');
+            state.groups.push(newGroup);
+            entry.groupId = newGroup.id;
+            saveStateToCache();
+            
+            const resExam = await fetch(`/api/exams/${entry.id}/group`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groupId: newGroup.id })
+            });
+            if (!resExam.ok) throw new Error('Error al asociar grupo');
+            populateDetailGroupSelect(entry);
+          } catch(e) {
+            console.error(e);
+            setError('Error al crear grupo o asociar el examen.');
+          }
+        }, () => {
+          els.detailGroupSelect.value = entry.groupId || '';
+        });
+      } else {
+        try {
+          entry.groupId = val || null;
+          saveStateToCache();
+          const res = await fetch(`/api/exams/${entry.id}/group`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupId: val || null })
+          });
+          if (!res.ok) throw new Error('Error al asociar grupo');
+        } catch(e) {
+          console.error(e);
+          setError('No se pudo asociar el examen al grupo.');
+        }
+      }
+    };
+  }
+
+  function updateOnlineStatus(forceOfflineFlag = false) {
+    const isOffline = !navigator.onLine || forceOfflineFlag;
+    const badge = document.getElementById('offline-badge');
+    if (badge) {
+      if (isOffline) {
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+  }
+
+  window.addEventListener('online', () => updateOnlineStatus(false));
+  window.addEventListener('offline', () => updateOnlineStatus(true));
+
+  function saveStateToCache() {
+    const user = localStorage.getItem('username') || 'anonymous';
+    localStorage.setItem(`offline_exams_${user}`, JSON.stringify(state.examHistory));
+    localStorage.setItem(`offline_groups_${user}`, JSON.stringify(state.groups));
+  }
+
+  async function loadDatabaseState() {
+    const user = localStorage.getItem('username') || 'anonymous';
+    let loadedFromCache = false;
+
+    // 1. Grupos
+    try {
+      const groupsRes = await fetch('/api/groups');
+      if (groupsRes.ok) {
+        state.groups = await groupsRes.json();
+        localStorage.setItem(`offline_groups_${user}`, JSON.stringify(state.groups));
+      } else {
+        throw new Error('groups response not ok');
+      }
+    } catch (e) {
+      console.warn('Error cargando grupos de SQLite, intentando caché:', e);
+      const cached = localStorage.getItem(`offline_groups_${user}`);
+      if (cached) {
+        state.groups = JSON.parse(cached);
+        loadedFromCache = true;
+      }
+    }
+
+    // 2. Exámenes
+    try {
+      const examsRes = await fetch('/api/exams');
+      if (examsRes.ok) {
+        state.examHistory = await examsRes.json();
+        localStorage.setItem(`offline_exams_${user}`, JSON.stringify(state.examHistory));
+      } else {
+        throw new Error('exams response not ok');
+      }
+    } catch (e) {
+      console.warn('Error cargando exámenes de SQLite, intentando caché:', e);
+      const cached = localStorage.getItem(`offline_exams_${user}`);
+      if (cached) {
+        state.examHistory = JSON.parse(cached);
+        loadedFromCache = true;
+      }
+    }
+
+    // 3. Archivos
+    try {
+      const filesRes = await fetch('/api/files');
+      if (filesRes.ok) {
+        state.availableFiles = await filesRes.json();
+        state.availableFiles.forEach(f => f.checked = false);
+        localStorage.setItem(`offline_files_${user}`, JSON.stringify(state.availableFiles));
+      } else {
+        throw new Error('files response not ok');
+      }
+    } catch (e) {
+      console.warn('Error cargando archivos de SQLite, intentando caché:', e);
+      const cached = localStorage.getItem(`offline_files_${user}`);
+      if (cached) {
+        state.availableFiles = JSON.parse(cached);
+        state.availableFiles.forEach(f => f.checked = false);
+        loadedFromCache = true;
+      }
+    }
+
+    // Si cargamos de la caché o el navegador está offline, mostrar el badge offline
+    updateOnlineStatus(loadedFromCache);
+  }
+
+  function downloadExamPdf(topic, correctCount, total, questions, answers, difficulty) {
+    const container = document.createElement('div');
+    container.style.padding = '30px';
+    container.style.color = '#111';
+    container.style.background = '#fff';
+    container.style.fontFamily = '"Inter", "Helvetica Neue", Arial, sans-serif';
+    container.style.fontSize = '12px';
+    container.style.lineHeight = '1.5';
+ 
+    const isEn = questions && questions.length > 0 && /\b(the|is|of|and|what|which|with|in|to|for)\b/i.test(questions[0].question || '');
+ 
+    const txtReport = isEn ? 'Exam Report' : 'Reporte de Examen';
+    const txtTopic = isEn ? 'Topic' : 'Tema';
+    const txtDifficulty = isEn ? 'Difficulty' : 'Dificultad';
+    const diffLabels = {
+      'easy': isEn ? 'Easy 🌱' : 'Fácil 🌱',
+      'normal': isEn ? 'Normal 🎯' : 'Normal 🎯',
+      'hard': isEn ? 'Hard 🔥' : 'Difícil 🔥',
+      'extra-hard': isEn ? 'Extra Hard 💀' : 'Extra Difícil 💀'
+    };
+    const diffText = diffLabels[difficulty] || (isEn ? 'Normal 🎯' : 'Normal 🎯');
+    const txtAIGenerated = isEn ? 'Generated with Artificial Intelligence' : 'Generado con Inteligencia Artificial';
+    const txtPassed = isEn ? 'Passed' : 'Aprobado';
+    const txtFailed = isEn ? 'Failed' : 'Reprobado';
+    const txtScore = isEn ? 'Score' : 'Calificación';
+ 
+    const txtCorrectMarker = isEn ? '✓ (Correct)' : '✓ (Correcta)';
+    const txtUserMarker = isEn ? '✗ (Your answer)' : '✗ (Tu respuesta)';
+ 
+    const txtJustify = isEn ? 'Justification of options:' : 'Justificación de las opciones:';
+    const txtCorrect = isEn ? 'Correct' : 'Correcta';
+    const txtIncorrect = isEn ? 'Incorrect' : 'Incorrecta';
+    const txtConcept = isEn ? 'Key concept:' : 'Concepto clave:';
+    const txtExplanation = isEn ? 'Explanation:' : 'Explicación:';
+    const txtFooter = isEn ? 'Studied with Pop Quiz Instantáneo' : 'Estudiado con Pop Quiz Instantáneo';
+ 
+    const headerHtml = `
+      <div style="border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+          <h1 style="font-size: 24px; margin: 0 0 6px 0; color: #1a365d; font-weight: 700;">${txtReport}</h1>
+          <p style="margin: 0; font-size: 14px; color: #4a5568;"><b>${txtTopic}:</b> ${escapeHtml(topic)}</p>
+          <p style="margin: 0; font-size: 12px; color: #4a5568;"><b>${txtDifficulty}:</b> ${diffText}</p>
+          <p style="margin: 0; font-size: 11px; color: #718096;">${txtAIGenerated}</p>
+        </div>
+        <div style="text-align: right;">
+          <div style="display: inline-block; padding: 6px 12px; border: 2px solid ${correctCount / total >= 0.6 ? '#2f6b3a' : '#c53030'}; border-radius: 4px; font-weight: bold; font-size: 14px; color: ${correctCount / total >= 0.6 ? '#2f6b3a' : '#c53030'}; text-transform: uppercase; margin-bottom: 6px;">
+            ${correctCount / total >= 0.6 ? txtPassed : txtFailed}
+          </div>
+          <p style="margin: 0; font-size: 13px; font-weight: 600; color: #2d3748;">${txtScore}: ${correctCount} / ${total} (${Math.round((correctCount/total)*100)}%)</p>
+        </div>
+      </div>
+    `;
+    container.innerHTML += headerHtml;
+
+    const letters = ['A', 'B', 'C', 'D', 'E'];
+    questions.forEach((q, idx) => {
+      const userAns = answers[idx];
+      const isCorrect = userAns === q.correct;
+      
+      let questionHtml = `
+        <div style="margin-bottom: 24px; page-break-inside: avoid;">
+          <div style="font-size: 13px; font-weight: 600; color: #2d3748; margin-bottom: 8px;">
+            <span style="color: #4a5568; margin-right: 6px;">${idx + 1}.</span>${escapeHtml(q.question)}
+          </div>
+          <div style="margin-left: 15px; margin-bottom: 8px;">
+      `;
+
+      q.options.forEach((optText, optIdx) => {
+        let optionStyle = 'padding: 4px 8px; margin-bottom: 4px; border-radius: 4px; display: flex; align-items: center;';
+        let optionPrefix = `${letters[optIdx]})`;
+        let optionMarker = '';
+
+        if (optIdx === q.correct) {
+          optionStyle += ' background-color: #f0fff4; border: 1px solid #c6f6d5; color: #22543d; font-weight: 500;';
+          optionMarker = ` <span style="color: #38a169; margin-left: 6px; font-weight: bold;">${txtCorrectMarker}</span>`;
+        } else if (optIdx === userAns) {
+          optionStyle += ' background-color: #fff5f5; border: 1px solid #fed7d7; color: #742a2a;';
+          optionMarker = ` <span style="color: #e53e3e; margin-left: 6px; font-weight: bold;">${txtUserMarker}</span>`;
+        } else {
+          optionStyle += ' color: #4a5568;';
+        }
+
+        questionHtml += `
+          <div style="${optionStyle}">
+            <span style="font-weight: 600; margin-right: 6px;">${optionPrefix}</span>
+            <span>${escapeHtml(optText)}</span>
+            ${optionMarker}
+          </div>
+        `;
+      });
+
+      questionHtml += `</div>`;
+
+      let explanationText = '';
+      if (q.explanations && Array.isArray(q.explanations) && q.explanations.length === q.options.length) {
+        let optionsHtml = '';
+        q.options.forEach((optText, optIdx) => {
+          const letter = letters[optIdx] || String.fromCharCode(65 + optIdx);
+          const isCorrectOpt = q.correct === optIdx;
+          optionsHtml += `<div style="margin-bottom: 4px; padding-left: 10px;"><b>${letter})</b> ${escapeHtml(optText)} — <span style="font-weight: bold; color: ${isCorrectOpt ? '#2f6b3a' : '#c53030'};">(${isCorrectOpt ? txtCorrect : txtIncorrect})</span>: ${escapeHtml(cleanExplanationText(q.explanations[optIdx]))}</div>`;
+        });
+
+        explanationText = `
+          <div style="font-weight: bold; margin-bottom: 6px; color: #2d3748;">${txtJustify}</div>
+          ${optionsHtml}
+          ${q.explanation ? `<div style="margin-top: 6px; border-top: 1px dashed #cbd5e0; padding-top: 6px; font-style: italic; color: #718096;"><b>${txtConcept}</b> ${escapeHtml(q.explanation)}</div>` : ''}
+        `;
+      } else {
+        explanationText = q.explanation ? `<b>${txtExplanation}</b> ${escapeHtml(q.explanation)}` : '';
+      }
+
+      if (explanationText) {
+        questionHtml += `
+          <div style="background-color: #f7fafc; border-left: 3px solid #cbd5e0; padding: 8px 12px; margin-left: 15px; font-size: 11px; color: #4a5568;">
+            ${explanationText}
+          </div>
+        `;
+      }
+
+      questionHtml += `</div>`;
+      container.innerHTML += questionHtml;
+    });
+
+    container.innerHTML += `
+      <div style="margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 12px; text-align: center; font-size: 10px; color: #a0aec0;">
+        ${txtFooter}
+      </div>
+    `;
+
+    const safeFilename = `Examen_${topic.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`;
+    const opt = {
+      margin:       15,
+      filename:     safeFilename,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:    { mode: ['css', 'legacy'] }
+    };
+
+    html2pdf().from(container).set(opt).save();
+  }
+
+  // --- Initial Bindings ---
+  els.btnGoHistoryFromResults.addEventListener('click', () => {
+    setError(null);
+    showScreen('history');
+    renderGroupTabs();
+    renderHistoryList();
+  });
+  els.btnGoToConfig.addEventListener('click', () => {
+    setError(null);
+    state.configReferrer = 'history';
+    showScreen('config');
+    renderLibraryLists();
+  });
+  els.btnGoToConfigFromGroup.addEventListener('click', () => {
+    setError(null);
+    state.configReferrer = 'groupExams';
+    showScreen('config');
+    renderLibraryLists();
+  });
+  els.btnCreateNewGroup.addEventListener('click', addGroup);
+  els.btnGoToLibrary.addEventListener('click', () => {
+    setError(null);
+    state.libraryReferrer = 'history';
+    showScreen('library');
+    renderLibraryLists();
+  });
+  els.btnGoToLibraryFromGroup.addEventListener('click', () => {
+    setError(null);
+    state.libraryReferrer = 'groupExams';
+    showScreen('library');
+    renderLibraryLists();
+  });
+  els.btnBackToHomeFromConfig.addEventListener('click', () => {
+    setError(null);
+    showScreen(state.configReferrer);
+    if (state.configReferrer === 'history') {
+      renderGroupTabs();
+      renderHistoryList();
+    } else {
+      renderHistoryList();
+    }
+  });
+  els.btnBackToHomeFromLibrary.addEventListener('click', () => {
+    setError(null);
+    showScreen(state.libraryReferrer);
+    if (state.libraryReferrer === 'history') {
+      renderGroupTabs();
+      renderHistoryList();
+    } else {
+      renderHistoryList();
+    }
+  });
+  els.btnBackToLibraryFromPreview.addEventListener('click', () => {
+    if (currentPreviewUrl) {
+      URL.revokeObjectURL(currentPreviewUrl);
+      currentPreviewUrl = null;
+    }
+    setError(null);
+    showScreen('library');
+    renderLibraryLists();
+  });
+  els.btnBackFromDetail.addEventListener('click', () => {
+    setError(null);
+    showScreen('groupExams');
+    renderHistoryList();
+  });
+  els.btnBackFromGroupExams.addEventListener('click', () => {
+    setError(null);
+    showScreen('history');
+    renderGroupTabs();
+  });
+  els.btnClearHistory.addEventListener('click', async () => {
+    const isAll = state.activeGroupTab === 'all';
+    const isUngrouped = state.activeGroupTab === 'ungrouped';
+    const confirmMsg = isAll 
+      ? '¿Borrar todo el historial de exámenes?' 
+      : (isUngrouped ? '¿Borrar todos los exámenes sin grupo?' : '¿Borrar todos los exámenes de este grupo?');
+      
+    const confirmed = await showConfirmModal('Limpiar historial', confirmMsg + ' Esta acción es permanente.');
+    if(!confirmed) return;
+    
+    const oldHistory = state.examHistory.slice();
+
+    if (isAll) {
+      state.examHistory = [];
+    } else if (isUngrouped) {
+      state.examHistory = state.examHistory.filter(e => e.groupId);
+    } else {
+      state.examHistory = state.examHistory.filter(e => e.groupId !== state.activeGroupTab);
+    }
+    saveStateToCache();
+    renderHistoryList();
+
+    try {
+      let url = '/api/exams';
+      if (!isAll) {
+        url += '?groupId=' + (isUngrouped ? 'ungrouped' : state.activeGroupTab);
+      }
+      const res = await fetch(url, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al limpiar el historial');
+    } catch(e) {
+      console.error(e);
+      state.examHistory = oldHistory;
+      saveStateToCache();
+      renderHistoryList();
+      setError('No se pudo borrar el historial del servidor. Se revirtieron los cambios.');
+    }
+  });
+
+  els.btnClearLibrary.addEventListener('click', async () => {
+    const isGroup = state.libraryReferrer === 'groupExams';
+    const confirmMsg = isGroup 
+      ? '¿Eliminar todos los archivos de este grupo?' 
+      : '¿Eliminar todos los archivos de tu biblioteca?';
+      
+    const confirmed = await showConfirmModal('Limpiar biblioteca', confirmMsg + ' Esta acción es permanente.');
+    if(!confirmed) return;
+    
+    try {
+      let url = '/api/files';
+      if (isGroup) {
+        url += '?groupId=' + state.activeGroupTab;
+      }
+      const res = await fetch(url, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al vaciar la biblioteca');
+      
+      if (isGroup) {
+        state.availableFiles = state.availableFiles.filter(f => f.groupId !== state.activeGroupTab);
+      } else {
+        state.availableFiles = [];
+      }
+      renderLibraryLists();
+    } catch(e) {
+      console.error(e);
+      setError('No se pudieron eliminar los archivos de la base de datos.');
+    }
+  });
+
+  els.libSearchInput.addEventListener('input', () => {
+    els.libSearchDropdown.classList.remove('hidden');
+    renderConfigLibraryUI();
+  });
+  
+  els.libSearchInput.addEventListener('focus', () => {
+    els.libSearchDropdown.classList.remove('hidden');
+    renderConfigLibraryUI();
+  });
+  
+  els.btnToggleLibDropdown.addEventListener('click', (e) => {
+    e.stopPropagation();
+    els.libSearchDropdown.classList.toggle('hidden');
+    renderConfigLibraryUI();
+  });
+  
+  document.addEventListener('click', (e) => {
+    const container = document.querySelector('.search-dropdown-container');
+    if (container && !container.contains(e.target)) {
+      els.libSearchDropdown.classList.add('hidden');
+    }
+  });
+
+  els.librarySearchInput.addEventListener('input', () => {
+    renderLibraryLists();
+  });
+ 
+  // --- Auth bindings and logic ---
+  let authMode = 'login'; // 'login' | 'register'
+
+  function checkSession() {
+    const user = localStorage.getItem('username');
+    if (user) {
+      els.currentUserDisplay.textContent = user;
+      showScreen('history');
+      loadDatabaseState().then(() => {
+        renderGroupTabs();
+        renderHistoryList();
+      });
+    } else {
+      showScreen('auth');
+    }
+  }
+
+  function setAuthError(msg) {
+    if (!msg) {
+      els.authErrorBox.classList.add('hidden');
+      els.authErrorBox.textContent = '';
+      return;
+    }
+    els.authErrorBox.textContent = msg;
+    els.authErrorBox.classList.remove('hidden');
+  }
+
+  els.btnToggleAuthMode.addEventListener('click', () => {
+    if (authMode === 'login') {
+      authMode = 'register';
+      els.authTitle.textContent = 'Registrarse';
+      els.authSubtitle.textContent = 'Crea una cuenta nueva con un nombre de usuario y contraseña.';
+      els.btnSubmitAuth.textContent = 'Registrarse';
+      els.toggleActionText.textContent = 'Inicia sesión aquí';
+    } else {
+      authMode = 'login';
+      els.authTitle.textContent = 'Iniciar sesión';
+      els.authSubtitle.textContent = 'Ingresa tus credenciales para ingresar a la aplicación.';
+      els.btnSubmitAuth.textContent = 'Iniciar sesión';
+      els.toggleActionText.textContent = 'Regístrate aquí';
+    }
+    setAuthError(null);
+  });
+
+  function showCustomAlert(title, message, callback) {
+    return new Promise((resolve) => {
+      const alertModalOverlay = document.getElementById('alertModalOverlay');
+      const alertModalTitle = document.getElementById('alertModalTitle');
+      const alertModalMessage = document.getElementById('alertModalMessage');
+      const btnAlertModalClose = document.getElementById('btnAlertModalClose');
+      
+      alertModalTitle.textContent = title;
+      alertModalMessage.textContent = message;
+      alertModalOverlay.classList.remove('hidden');
+      
+      // Evitar acumulamiento de listeners de eventos clonando el botón
+      const newBtn = btnAlertModalClose.cloneNode(true);
+      btnAlertModalClose.parentNode.replaceChild(newBtn, btnAlertModalClose);
+      
+      newBtn.addEventListener('click', () => {
+        alertModalOverlay.classList.add('hidden');
+        if (callback) callback();
+        resolve();
+      });
+    });
+  }
+
+  els.btnSubmitAuth.addEventListener('click', async () => {
+    const username = els.authUsername.value.trim();
+    const password = els.authPassword.value;
+    
+    if (!username || !password) {
+      setAuthError('Por favor ingresa un usuario y contraseña.');
+      return;
+    }
+    
+    setAuthError(null);
+    const endpoint = authMode === 'login' ? '/api/login' : '/api/register';
+    
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Ocurrió un error en la solicitud.');
+      }
+      
+      if (authMode === 'login') {
+        localStorage.setItem('username', data.username);
+        els.authUsername.value = '';
+        els.authPassword.value = '';
+        checkSession();
+      } else {
+        showCustomAlert('¡Usuario Creado!', 'Tu cuenta ha sido registrada con éxito. Iniciando sesión...', () => {
+          localStorage.setItem('username', username.toLowerCase());
+          els.authUsername.value = '';
+          els.authPassword.value = '';
+          authMode = 'login';
+          checkSession();
+        });
+      }
+    } catch (err) {
+      setAuthError(err.message);
+    }
+  });
+
+  // Support pressing Enter key in username and password fields to submit
+  const handleAuthEnter = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      els.btnSubmitAuth.click();
+    }
+  };
+  els.authUsername.addEventListener('keydown', handleAuthEnter);
+  els.authPassword.addEventListener('keydown', handleAuthEnter);
+
+  els.btnLogout.addEventListener('click', () => {
+    localStorage.removeItem('username');
+    els.authUsername.value = '';
+    els.authPassword.value = '';
+    
+    // Clear local state
+    state.questions = [];
+    state.answers = [];
+    state.availableFiles = [];
+    state.examHistory = [];
+    state.groups = [];
+    state.activeGroupTab = 'all';
+    state.currentTopic = '';
+    
+    // Clear UI lists
+    els.historyList.innerHTML = '';
+    els.groupCardsContainer.innerHTML = '';
+    els.configLibraryList.innerHTML = '';
+    els.libLibraryList.innerHTML = '';
+    
+    showScreen('auth');
+  });
+
+  // Botón de Soporte y Ayuda
+  const btnSupport = document.getElementById('btnSupport');
+  if (btnSupport) {
+    btnSupport.addEventListener('click', () => {
+      showCustomAlert(
+        'Ayuda y Soporte',
+        'Para ayuda o soporte contactar a: Francisco Ernesto Ramírez Mercedes\n\nNúmero de contacto: 849-459-6341\n\nCorreo electrónico: franciscoernesto0404@gmail.com'
+      );
+    });
+  }
+
+  // Check auth session on load
+  checkSession();
+
+})();
+</script>
+</body>
+</html>

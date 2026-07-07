@@ -1,0 +1,15 @@
+{
+  "name": "generador-examenes-ia",
+  "version": "1.0.0",
+  "description": "Generador de Exámenes con Inteligencia Artificial utilizando DeepSeek",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "dotenv": "^16.4.5",
+    "sqlite3": "^5.1.7"
+  }
+}
