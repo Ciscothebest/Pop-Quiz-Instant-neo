@@ -507,26 +507,16 @@ app.post('/api/files', async (req, res) => {
       return res.status(409).json({ error: `El archivo "${name}" ya existe en la biblioteca.` });
     }
 
-    // Definir nombres de archivo
-    const contentFilename = `${id}_content.dat`;
-    const originalDataFilename = `${id}_orig.dat`;
-    
-    // Escribir contenido asíncronamente en el disco
-    await Promise.all([
-      fs.promises.writeFile(path.join(uploadsDir, contentFilename), content, 'utf8'),
-      fs.promises.writeFile(path.join(uploadsDir, originalDataFilename), originalData, 'utf8')
-    ]);
-
-    // Insertar sólo los nombres de archivos de referencia en SQLite (escritura ultra-rápida)
+    // Insertar directamente el contenido y los datos originales en la base de datos (PostgreSQL persistente)
     await dbRun(`
       INSERT INTO files (id, name, content, size_label, original_data, media_type, pdf_images, active, username, group_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `, [
       id,
       name,
-      contentFilename,
+      content,
       sizeLabel,
-      originalDataFilename,
+      originalData,
       mediaType,
       JSON.stringify(pdfImages || []),
       req.username,

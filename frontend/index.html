@@ -1437,7 +1437,7 @@
           const pdf = await loadingTask.promise;
           
           let fullText = "";
-          const skipImages = pdf.numPages > 15;
+          const skipImages = true; // Desactivado para carga instantánea
           // Scan pages for text and images
           for (let i = 1; i <= pdf.numPages; i++) {
             if (fullText.length >= MAX_TEXT_CHARS_PER_FILE) {
