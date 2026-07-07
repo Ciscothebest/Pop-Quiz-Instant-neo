@@ -190,6 +190,10 @@ const dbGet = (query, params = []) => {
   });
 };
 
+// Enable CORS for cross-origin requests (e.g. Netlify frontend to Render backend)
+const cors = require('cors');
+app.use(cors());
+
 // Middleware to parse JSON bodies (with size limits for large files/text contents)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

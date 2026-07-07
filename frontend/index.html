@@ -1192,6 +1192,11 @@
     });
   }
 
+  // CONFIGURACION DE PRODUCCION (MANUAL):
+  // Si deseas desplegar el frontend en Netlify y el backend en Render, coloca aquí la URL de tu Render (ej: 'https://mi-backend.onrender.com').
+  // Déjalo vacío ('') si vas a desplegar todo junto en Render.
+  const API_BASE_URL = '';
+
   // Global fetch wrapper to inject x-username header for authentication
   const originalFetch = window.fetch;
   window.fetch = function(url, options = {}) {
@@ -1200,7 +1205,13 @@
       options.headers = options.headers || {};
       options.headers['x-username'] = username;
     }
-    return originalFetch(url, options);
+    
+    let targetUrl = url;
+    if (API_BASE_URL && url.startsWith('/api')) {
+      targetUrl = API_BASE_URL.replace(/\/$/, '') + url;
+    }
+    
+    return originalFetch(targetUrl, options);
   };
 
   // Configure PDF.js worker
