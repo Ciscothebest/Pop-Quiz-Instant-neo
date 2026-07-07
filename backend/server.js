@@ -12,7 +12,7 @@ const pbkdf2 = promisify(crypto.pbkdf2);
 const randomBytes = promisify(crypto.randomBytes);
 
 // Crear la carpeta de uploads para desacoplar el almacenamiento de SQLite
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -39,7 +39,7 @@ if (cluster.isPrimary || cluster.isMaster) {
   console.log(`Proceso principal ${process.pid} corriendo.`);
 
   // 1. Inicializar base de datos y correr migraciones e índices en el proceso master
-  const dbPath = path.join(__dirname, 'examenes.db');
+  const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
   const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
       console.error('Error al abrir la base de datos SQLite en master:', err);
@@ -145,7 +145,7 @@ if (cluster.isPrimary || cluster.isMaster) {
   const PORT = process.env.PORT || 3000;
 
 // Initialize SQLite database
-const dbPath = path.join(__dirname, 'examenes.db');
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'examenes.db');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error(`Error al abrir la base de datos SQLite en worker ${process.pid}:`, err);
