@@ -2320,6 +2320,22 @@
         return;
       }
 
+      // Obtener el token de OneDrive para el usuario actual de forma segura
+      els.loadingMsg.textContent = 'Autenticando con OneDrive...';
+      showScreen('loading');
+      let oneDriveToken;
+      try {
+        oneDriveToken = await getOneDriveToken();
+      } catch (authErr) {
+        console.error("Error de autenticación para Picker:", authErr);
+        await showCustomAlert('Autenticación Fallida', authErr.message);
+        return;
+      } finally {
+        showScreen('library');
+      }
+
+      if (!oneDriveToken) return;
+
       const odOptions = {
         clientId: config.onedriveClientId,
         action: "download",
@@ -2327,7 +2343,8 @@
         openInNewWindow: true,
         redirectUri: window.location.origin,
         advanced: {
-          endpointHint: "api.onedrive.com"
+          endpointHint: "api.onedrive.com",
+          accessToken: oneDriveToken // <- Inyectar token del usuario actual
         },
         success: async (files) => {
           if (files && files.value) {
