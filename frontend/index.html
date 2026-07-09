@@ -940,16 +940,11 @@
       <label style="margin-top: 14px; margin-bottom: 6px;">Archivos seleccionados para el examen:</label>
       <div id="selectedFilesList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;"></div>
 
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 14px; margin-bottom: 6px;">
+      <div style="margin-top: 14px; margin-bottom: 6px;">
         <label style="margin:0;">Agregar nuevos archivos a la biblioteca</label>
-        <button type="button" class="btn-secondary btn-cloud-settings" id="btnCloudSettingsFromConfig" style="margin:0; padding: 4px 8px; font-size:0.75rem; display:flex; align-items:center; gap:4px; height:auto; width:auto;">⚙️ Cuentas de Nube</button>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-        <button type="button" class="btn-secondary" id="btnGoogleDriveFromConfig" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px;">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.47 15.06L14.37 6.22C14.07 5.7 13.56 5.37 13 5.37H11C10.44 5.37 9.93 5.7 9.63 6.22L4.53 15.06C4.23 15.58 4.23 16.22 4.53 16.74L5.53 18.47C5.83 18.99 6.34 19.32 6.9 19.32H17.1C17.66 19.32 18.17 18.99 18.47 18.47L19.47 16.74C19.77 16.22 19.77 15.58 19.47 15.06M12.52 15.54H8.48L10.5 12.02L12.52 15.54M14.54 12.02L12.52 8.5H16.56L14.54 12.02Z"/></svg>
-          Google Drive
-        </button>
-        <button type="button" class="btn-secondary" id="btnOneDriveFromConfig" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+      <div style="margin-bottom: 10px;">
+        <button type="button" class="btn-secondary" id="btnOneDriveFromConfig" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px; width:100%;">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
           OneDrive
         </button>
@@ -1092,16 +1087,11 @@
         <button class="btn-secondary" id="btnBackToHomeFromLibrary" style="margin-top:0; width:auto;">← Volver</button>
       </div>
       
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 14px; margin-bottom: 6px;">
+      <div style="margin-top: 14px; margin-bottom: 6px;">
         <label style="margin:0;">Subir archivos a la biblioteca</label>
-        <button type="button" class="btn-secondary btn-cloud-settings" id="btnCloudSettingsFromLib" style="margin:0; padding: 4px 8px; font-size:0.75rem; display:flex; align-items:center; gap:4px; height:auto; width:auto;">⚙️ Cuentas de Nube</button>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-        <button type="button" class="btn-secondary" id="btnGoogleDriveFromLib" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px;">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.47 15.06L14.37 6.22C14.07 5.7 13.56 5.37 13 5.37H11C10.44 5.37 9.93 5.7 9.63 6.22L4.53 15.06C4.23 15.58 4.23 16.22 4.53 16.74L5.53 18.47C5.83 18.99 6.34 19.32 6.9 19.32H17.1C17.66 19.32 18.17 18.99 18.47 18.47L19.47 16.74C19.77 16.22 19.77 15.58 19.47 15.06M12.52 15.54H8.48L10.5 12.02L12.52 15.54M14.54 12.02L12.52 8.5H16.56L14.54 12.02Z"/></svg>
-          Google Drive
-        </button>
-        <button type="button" class="btn-secondary" id="btnOneDriveFromLib" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+      <div style="margin-bottom: 10px;">
+        <button type="button" class="btn-secondary" id="btnOneDriveFromLib" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px; width:100%;">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
           OneDrive
         </button>
@@ -1744,27 +1734,27 @@
   async function handleFiles(fileListRaw, autoCheck = true){
     const files = Array.from(fileListRaw);
     
-    // Comprobar si OneDrive está configurado para la subida automática
+    // Requerir inicio de sesión en OneDrive para poder subir
     const config = state.cloudConfig || {};
     let oneDriveToken = state.onedriveAccessToken || null;
     
-    if (config.onedriveClientId && !oneDriveToken) {
-      // Pedir al usuario autorización mediante un botón directo de la confirmación
-      const wantsOneDrive = await showConfirmModal(
-        '☁️ Subir a OneDrive',
-        'Tienes OneDrive configurado. ¿Deseas iniciar sesión para subir estos archivos a la nube o prefieres procesarlos localmente en este PC?',
-        'Subir a OneDrive',
-        'Procesar localmente'
+    if (!oneDriveToken) {
+      const connect = await showConfirmModal(
+        '☁️ Conectar OneDrive',
+        'Para subir archivos a la biblioteca, debes iniciar sesión en tu cuenta de Microsoft OneDrive.',
+        'Iniciar Sesión',
+        'Cancelar'
       );
-      
-      if (wantsOneDrive) {
-        try {
-          // Esto se ejecuta tras un clic en el botón de confirmación (gesto directo del usuario)
-          oneDriveToken = await getOneDriveToken();
-        } catch (e) {
-          console.warn("No se pudo obtener token de OneDrive para subida automática:", e);
-          await showCustomAlert('OneDrive', 'No se pudo iniciar sesión. Los archivos se procesarán de forma local.');
-        }
+      if (!connect) {
+        return; // Abortar subida
+      }
+      try {
+        // Esto se ejecuta tras un clic en el botón (gesto directo del usuario)
+        oneDriveToken = await getOneDriveToken();
+      } catch (e) {
+        console.warn("No se pudo obtener token de OneDrive para subida:", e);
+        await showCustomAlert('OneDrive', 'No se pudo iniciar sesión en OneDrive. Subida cancelada.');
+        return; // Abortar subida
       }
     }
 
@@ -1814,52 +1804,34 @@
         let name = file.name;
         let fileId = crypto.randomUUID();
 
-        if (oneDriveToken) {
-          els.loadingMsg.textContent = `Subiendo archivo a OneDrive: ${file.name}...`;
-          els.uploadProgressBar.style.width = '0%';
-          els.uploadProgressPercentage.textContent = '0%';
-          els.uploadProgressContainer.classList.remove('hidden');
-          showScreen('loading');
-          try {
-            const driveItem = await uploadFileToOneDrive(file, oneDriveToken, (loaded, total) => {
-              const pct = Math.round((loaded / total) * 100);
-              els.uploadProgressBar.style.width = `${pct}%`;
-              els.uploadProgressPercentage.textContent = `${pct}%`;
-            });
-            fileId = `od_${driveItem.id}`;
-            name = file.name + ' (OneDrive)';
-            originalData = JSON.stringify({
-              provider: 'onedrive',
-              fileId: driveItem.id,
-              downloadUrl: driveItem["@microsoft.graph.downloadUrl"],
-              webUrl: driveItem.webUrl
-            });
-            // Al guardarse en la nube, dejamos content vacío
-            content = '';
-          } catch (uploadErr) {
-            console.error("Error al subir a OneDrive, cayendo a subida local:", uploadErr);
-            // Fallback a subida local clásica si falla la subida a nube
-            originalData = await readFileAsBase64(file);
-            const parsed = await extractTextFromFile(file);
-            content = parsed.content;
-            pdfImages = parsed.pdfImages;
-          } finally {
-            els.uploadProgressContainer.classList.add('hidden');
-            showScreen('library');
-          }
-        } else {
-          // Subida local normal
-          els.loadingMsg.textContent = `Procesando archivo local: ${file.name}...`;
+        els.loadingMsg.textContent = `Subiendo archivo a OneDrive: ${file.name}...`;
+        els.uploadProgressBar.style.width = '0%';
+        els.uploadProgressPercentage.textContent = '0%';
+        els.uploadProgressContainer.classList.remove('hidden');
+        showScreen('loading');
+        try {
+          const driveItem = await uploadFileToOneDrive(file, oneDriveToken, (loaded, total) => {
+            const pct = Math.round((loaded / total) * 100);
+            els.uploadProgressBar.style.width = `${pct}%`;
+            els.uploadProgressPercentage.textContent = `${pct}%`;
+          });
+          fileId = `od_${driveItem.id}`;
+          name = file.name + ' (OneDrive)';
+          originalData = JSON.stringify({
+            provider: 'onedrive',
+            fileId: driveItem.id,
+            downloadUrl: driveItem["@microsoft.graph.downloadUrl"],
+            webUrl: driveItem.webUrl
+          });
+          // Al guardarse en la nube, dejamos content vacío
+          content = '';
+        } catch (uploadErr) {
+          console.error("Error al subir a OneDrive:", uploadErr);
+          await showCustomAlert('Error de subida', `No se pudo subir el archivo "${file.name}" a OneDrive. Subida omitida.`);
+          continue; // Saltar el archivo
+        } finally {
           els.uploadProgressContainer.classList.add('hidden');
-          showScreen('loading');
-          try {
-            originalData = await readFileAsBase64(file);
-            const parsed = await extractTextFromFile(file);
-            content = parsed.content;
-            pdfImages = parsed.pdfImages;
-          } finally {
-            showScreen('library');
-          }
+          showScreen('library');
         }
 
         let truncated = false;
@@ -2066,7 +2038,7 @@
     const config = state.cloudConfig || {};
     const labelText = config.onedriveClientId 
       ? '☁️ <b>Subir a OneDrive</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX'
-      : '<b>Subir desde mi PC</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX';
+      : '⚠️ <b>OneDrive no configurado</b><br>Por favor, añade el ONEDRIVE_CLIENT_ID en el archivo .env de tu servidor';
       
     if (els.fileDropLabel) els.fileDropLabel.innerHTML = labelText;
     if (els.libFileDropLabel) els.libFileDropLabel.innerHTML = labelText;
@@ -4609,10 +4581,6 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
   });
 
   // Cloud buttons bindings
-  document.getElementById('btnCloudSettingsFromConfig').addEventListener('click', openCloudConfigModal);
-  document.getElementById('btnCloudSettingsFromLib').addEventListener('click', openCloudConfigModal);
-  document.getElementById('btnGoogleDriveFromConfig').addEventListener('click', openGooglePicker);
-  document.getElementById('btnGoogleDriveFromLib').addEventListener('click', openGooglePicker);
   document.getElementById('btnOneDriveFromConfig').addEventListener('click', openOneDrivePicker);
   document.getElementById('btnOneDriveFromLib').addEventListener('click', openOneDrivePicker);
   els.btnBackToHomeFromConfig.addEventListener('click', () => {
