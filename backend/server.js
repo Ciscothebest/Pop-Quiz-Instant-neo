@@ -651,7 +651,7 @@ app.delete('/api/exams/:id', async (req, res) => {
 // Files (Library) CRUD (Soft Delete supported, optimized with disk offloading)
 app.get('/api/files', async (req, res) => {
   try {
-    const rows = await dbAll('SELECT id, name, content, size_label, media_type, pdf_images, group_id FROM files WHERE active = 1 AND username = ?', [req.username]);
+    const rows = await dbAll('SELECT id, name, content, size_label, original_data, media_type, pdf_images, group_id FROM files WHERE active = 1 AND username = ?', [req.username]);
     
     // Leer el contenido de disco asíncronamente en paralelo
     const mapped = await Promise.all(rows.map(async (r) => {
@@ -665,12 +665,27 @@ app.get('/api/files', async (req, res) => {
           content = '';
         }
       }
+      
+      let originalData = r.original_data;
+      if (originalData && originalData.endsWith('_orig.dat')) {
+        try {
+          originalData = await fs.promises.readFile(path.join(uploadsDir, originalData), 'utf8');
+        } catch (err) {
+          console.error(`Error al leer originalData de disco ${r.original_data}:`, err);
+          originalData = '';
+        }
+      }
+
       return {
         id: r.id,
         name: r.name,
         content: content,
         sizeLabel: r.size_label,
+        size_label: r.size_label,
+        originalData: originalData,
+        original_data: originalData,
         mediaType: r.media_type,
+        media_type: r.media_type,
         pdfImages: JSON.parse(r.pdf_images || '[]'),
         groupId: r.group_id
       };
