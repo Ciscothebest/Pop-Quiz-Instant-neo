@@ -1738,12 +1738,25 @@
     
     // Comprobar si OneDrive está configurado para la subida automática
     const config = state.cloudConfig || {};
-    let oneDriveToken = null;
-    if (config.onedriveClientId) {
-      try {
-        oneDriveToken = await getOneDriveToken();
-      } catch (e) {
-        console.warn("No se pudo obtener token de OneDrive para subida automática:", e);
+    let oneDriveToken = state.onedriveAccessToken || null;
+    
+    if (config.onedriveClientId && !oneDriveToken) {
+      // Pedir al usuario autorización mediante un botón directo de la confirmación
+      const wantsOneDrive = await showConfirmModal(
+        '☁️ Subir a OneDrive',
+        'Tienes OneDrive configurado. ¿Deseas iniciar sesión para subir estos archivos a la nube o prefieres procesarlos localmente en este PC?',
+        'Subir a OneDrive',
+        'Procesar localmente'
+      );
+      
+      if (wantsOneDrive) {
+        try {
+          // Esto se ejecuta tras un clic en el botón de confirmación (gesto directo del usuario)
+          oneDriveToken = await getOneDriveToken();
+        } catch (e) {
+          console.warn("No se pudo obtener token de OneDrive para subida automática:", e);
+          await showCustomAlert('OneDrive', 'No se pudo iniciar sesión. Los archivos se procesarán de forma local.');
+        }
       }
     }
 
@@ -3935,8 +3948,10 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
   // ---- Confirmation modal ----
   let confirmResolver = null;
 
-  function showConfirmModal(title, text) {
+  function showConfirmModal(title, text, acceptText = 'Eliminar', cancelText = 'Cancelar') {
     return new Promise((resolve) => {
+      els.btnConfirmAccept.textContent = acceptText;
+      els.btnConfirmCancel.textContent = cancelText;
       els.confirmModalTitle.textContent = title;
       els.confirmModalText.textContent = text;
       els.confirmModalOverlay.classList.remove('hidden');
