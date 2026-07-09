@@ -1454,6 +1454,183 @@
     });
   }
 
+  async function extractTextFromFile(file) {
+    const lowerName = file.name.toLowerCase();
+    const isPdf = lowerName.endsWith('.pdf');
+    const isDocx = lowerName.endsWith('.docx') || lowerName.endsWith('.doc');
+    const isXlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+    const isPptx = lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt');
+    const isText = TEXT_EXTENSIONS.some(ext => lowerName.endsWith(ext)) || (file.type && file.type.startsWith('text/') && !isPdf && !isDocx && !isXlsx && !isPptx);
+
+    let content = '';
+    let pdfImages = [];
+
+    if (isPdf) {
+      if (!window.pdfjsLib) {
+        throw new Error('La librería PDF.js no se ha cargado. No se puede procesar PDFs.');
+      }
+      const buffer = await readFileAsArrayBuffer(file);
+      const loadingTask = pdfjsLib.getDocument({ data: buffer });
+      const pdf = await loadingTask.promise;
+      
+      let fullText = "";
+      const skipImages = true; // Desactivado para carga instantánea
+      for (let i = 1; i <= pdf.numPages; i++) {
+        if (fullText.length >= MAX_TEXT_CHARS_PER_FILE) {
+          break;
+        }
+
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(" ") + "\n";
+        fullText += `--- PAGINA ${i} ---\n${pageText}\n`;
+        
+        if (skipImages) {
+          continue;
+        }
+
+        const opList = await page.getOperatorList();
+        for (let j = 0; j < opList.fnArray.length; j++) {
+          const fn = opList.fnArray[j];
+          if (fn === pdfjsLib.OPS.paintImageXObject || 
+              fn === pdfjsLib.OPS.paintInlineImageXObject ||
+              fn === pdfjsLib.OPS.paintImageXObjectRepeat) {
+            
+            const objId = opList.argsArray[j][0];
+            try {
+              const imgObj = await new Promise((resolve) => {
+                page.objs.get(objId, (obj) => { resolve(obj); });
+              });
+              
+              if (imgObj) {
+                let dataUrl = null;
+                if (imgObj instanceof HTMLImageElement || imgObj instanceof HTMLCanvasElement || (imgObj.nodeName && (imgObj.nodeName === 'IMG' || imgObj.nodeName === 'CANVAS'))) {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = imgObj.width || imgObj.videoWidth;
+                  canvas.height = imgObj.height || imgObj.videoHeight;
+                  const ctx = canvas.getContext('2d');
+                  ctx.drawImage(imgObj, 0, 0);
+                  dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                } else if (imgObj.width && imgObj.height && imgObj.data) {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = imgObj.width;
+                  canvas.height = imgObj.height;
+                  const ctx = canvas.getContext('2d');
+                  
+                  const src = imgObj.data;
+                  const totalPixels = imgObj.width * imgObj.height;
+                  const rgbaData = new Uint8ClampedArray(totalPixels * 4);
+                  
+                  if (src.length === totalPixels * 3) {
+                    let idx = 0;
+                    for (let p = 0; p < src.length; p += 3) {
+                      rgbaData[idx] = src[p];
+                      rgbaData[idx+1] = src[p+1];
+                      rgbaData[idx+2] = src[p+2];
+                      rgbaData[idx+3] = 255;
+                      idx += 4;
+                    }
+                  } else if (src.length === totalPixels * 4) {
+                    rgbaData.set(src);
+                  } else if (src.length === totalPixels) {
+                    let idx = 0;
+                    for (let p = 0; p < src.length; p++) {
+                      rgbaData[idx] = src[p];
+                      rgbaData[idx+1] = src[p];
+                      rgbaData[idx+2] = src[p];
+                      rgbaData[idx+3] = 255;
+                      idx += 4;
+                    }
+                  } else {
+                    continue;
+                  }
+                  
+                  const imgData = new ImageData(rgbaData, imgObj.width, imgObj.height);
+                  ctx.putImageData(imgData, 0, 0);
+                  dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                }
+                
+                if (dataUrl) {
+                  pdfImages.push({
+                    page: i,
+                    dataUrl: dataUrl
+                  });
+                }
+              }
+            } catch (err) {
+              console.warn("Error al extraer objeto de imagen del PDF:", err);
+            }
+          }
+        }
+      }
+      content = fullText;
+    } else if (isDocx) {
+      if (lowerName.endsWith('.doc')) {
+        throw new Error('El formato .doc antiguo no está soportado. Por favor, conviértelo a .docx.');
+      }
+      if (!window.mammoth) {
+        throw new Error('La librería Mammoth.js no está cargada.');
+      }
+      const buffer = await readFileAsArrayBuffer(file);
+      const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+      content = result.value;
+    } else if (isXlsx) {
+      if (!window.XLSX) {
+        throw new Error('La librería SheetJS no está cargada.');
+      }
+      const buffer = await readFileAsArrayBuffer(file);
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      let sheetText = "";
+      workbook.SheetNames.forEach(sheetName => {
+        const worksheet = workbook.Sheets[sheetName];
+        const csv = XLSX.utils.sheet_to_csv(worksheet);
+        sheetText += `--- Hoja: ${sheetName} ---\n${csv}\n`;
+      });
+      content = sheetText;
+    } else if (isPptx) {
+      if (lowerName.endsWith('.ppt')) {
+        throw new Error('El formato .ppt antiguo no está soportado. Por favor, conviértelo a .pptx.');
+      }
+      if (!window.JSZip) {
+        throw new Error('La librería JSZip no está cargada.');
+      }
+      const buffer = await readFileAsArrayBuffer(file);
+      const zip = await JSZip.loadAsync(buffer);
+      let pptxText = "";
+      
+      const slideFiles = Object.keys(zip.files).filter(name => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'));
+      slideFiles.sort((a, b) => {
+        const numA = parseInt(a.replace(/[^\d]/g, ''));
+        const numB = parseInt(b.replace(/[^\d]/g, ''));
+        return numA - numB;
+      });
+      
+      for (const slideFile of slideFiles) {
+        const slideXml = await zip.files[slideFile].async("string");
+        const regex = /<a:t>([\s\S]*?)<\/a:t>/g;
+        let match;
+        let slideContent = "";
+        while ((match = regex.exec(slideXml)) !== null) {
+          const text = match[1].replace(/&amp;/g, '&')
+                               .replace(/&lt;/g, '<')
+                               .replace(/&gt;/g, '>')
+                               .replace(/&quot;/g, '"')
+                               .replace(/&#39;/g, "'");
+          slideContent += text + " ";
+        }
+        const slideNum = slideFile.replace(/[^\d]/g, '');
+        pptxText += `--- Diapositiva ${slideNum} ---\n${slideContent.trim()}\n`;
+      }
+      content = pptxText;
+    } else if (isText) {
+      content = await readFileAsText(file);
+    } else {
+      throw new Error('Formato no admitido: ' + file.name + '. Se admiten PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS y PPTX.');
+    }
+
+    return { content, pdfImages };
+  }
+
   async function handleFiles(fileListRaw, autoCheck = true){
     const files = Array.from(fileListRaw);
     for(const file of files){
@@ -1487,189 +1664,19 @@
 
       const lowerName = file.name.toLowerCase();
       const isPdf = lowerName.endsWith('.pdf');
-      const isDocx = lowerName.endsWith('.docx') || lowerName.endsWith('.doc');
-      const isXlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
-      const isPptx = lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt');
-      const isText = TEXT_EXTENSIONS.some(ext => lowerName.endsWith(ext)) || (file.type.startsWith('text/') && !isPdf && !isDocx && !isXlsx && !isPptx);
+      const mediaType = file.type || (isPdf ? 'application/pdf' : 'text/plain');
  
       try{
         let content = '';
         let originalData = '';
         let pdfImages = [];
-        const mediaType = file.type || (isPdf ? 'application/pdf' : 'text/plain');
 
         originalData = await readFileAsBase64(file);
 
-        if(isPdf){
-          if (!window.pdfjsLib) {
-            throw new Error('La librería PDF.js no se ha cargado. No se puede procesar PDFs.');
-          }
-          const buffer = await readFileAsArrayBuffer(file);
-          const loadingTask = pdfjsLib.getDocument({ data: buffer });
-          const pdf = await loadingTask.promise;
-          
-          let fullText = "";
-          const skipImages = true; // Desactivado para carga instantánea
-          // Scan pages for text and images
-          for (let i = 1; i <= pdf.numPages; i++) {
-            if (fullText.length >= MAX_TEXT_CHARS_PER_FILE) {
-              break;
-            }
-
-            const page = await pdf.getPage(i);
-            
-            // Extract text
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map(item => item.str).join(" ") + "\n";
-            fullText += `--- PAGINA ${i} ---\n${pageText}\n`;
-            
-            if (skipImages) {
-              continue;
-            }
-
-            // Detect and extract embedded images from the page operator list
-            const opList = await page.getOperatorList();
-            for (let j = 0; j < opList.fnArray.length; j++) {
-              const fn = opList.fnArray[j];
-              if (fn === pdfjsLib.OPS.paintImageXObject || 
-                  fn === pdfjsLib.OPS.paintInlineImageXObject ||
-                  fn === pdfjsLib.OPS.paintImageXObjectRepeat) {
-                
-                const objId = opList.argsArray[j][0];
-                try {
-                  const imgObj = await new Promise((resolve) => {
-                    page.objs.get(objId, (obj) => { resolve(obj); });
-                  });
-                  
-                  if (imgObj) {
-                    let dataUrl = null;
-                    if (imgObj instanceof HTMLImageElement || imgObj instanceof HTMLCanvasElement || (imgObj.nodeName && (imgObj.nodeName === 'IMG' || imgObj.nodeName === 'CANVAS'))) {
-                      const canvas = document.createElement('canvas');
-                      canvas.width = imgObj.width || imgObj.videoWidth;
-                      canvas.height = imgObj.height || imgObj.videoHeight;
-                      const ctx = canvas.getContext('2d');
-                      ctx.drawImage(imgObj, 0, 0);
-                      dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                    } else if (imgObj.width && imgObj.height && imgObj.data) {
-                      const canvas = document.createElement('canvas');
-                      canvas.width = imgObj.width;
-                      canvas.height = imgObj.height;
-                      const ctx = canvas.getContext('2d');
-                      
-                      const src = imgObj.data;
-                      const totalPixels = imgObj.width * imgObj.height;
-                      const rgbaData = new Uint8ClampedArray(totalPixels * 4);
-                      
-                      if (src.length === totalPixels * 3) {
-                        // RGB to RGBA
-                        let idx = 0;
-                        for (let p = 0; p < src.length; p += 3) {
-                          rgbaData[idx] = src[p];
-                          rgbaData[idx+1] = src[p+1];
-                          rgbaData[idx+2] = src[p+2];
-                          rgbaData[idx+3] = 255;
-                          idx += 4;
-                        }
-                      } else if (src.length === totalPixels * 4) {
-                        rgbaData.set(src);
-                      } else if (src.length === totalPixels) {
-                        // Grayscale to RGBA
-                        let idx = 0;
-                        for (let p = 0; p < src.length; p++) {
-                          rgbaData[idx] = src[p];
-                          rgbaData[idx+1] = src[p];
-                          rgbaData[idx+2] = src[p];
-                          rgbaData[idx+3] = 255;
-                          idx += 4;
-                        }
-                      } else {
-                        continue;
-                      }
-                      
-                      const imgData = new ImageData(rgbaData, imgObj.width, imgObj.height);
-                      ctx.putImageData(imgData, 0, 0);
-                      dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                    }
-                    
-                    if (dataUrl) {
-                      pdfImages.push({
-                        page: i,
-                        dataUrl: dataUrl
-                      });
-                    }
-                  }
-                } catch (err) {
-                  console.warn("Error al extraer objeto de imagen del PDF:", err);
-                }
-              }
-            }
-          }
-          
-content = fullText;
-        } else if (isDocx) {
-          if (lowerName.endsWith('.doc')) {
-            throw new Error('El formato .doc antiguo no está soportado. Por favor, conviértelo a .docx.');
-          }
-          if (!window.mammoth) {
-            throw new Error('La librería Mammoth.js no está cargada.');
-          }
-          const buffer = await readFileAsArrayBuffer(file);
-          const result = await mammoth.extractRawText({ arrayBuffer: buffer });
-          content = result.value;
-        } else if (isXlsx) {
-          if (!window.XLSX) {
-            throw new Error('La librería SheetJS no está cargada.');
-          }
-          const buffer = await readFileAsArrayBuffer(file);
-          const workbook = XLSX.read(buffer, { type: 'array' });
-          let sheetText = "";
-          workbook.SheetNames.forEach(sheetName => {
-            const worksheet = workbook.Sheets[sheetName];
-            const csv = XLSX.utils.sheet_to_csv(worksheet);
-            sheetText += `--- Hoja: ${sheetName} ---\n${csv}\n`;
-          });
-          content = sheetText;
-        } else if (isPptx) {
-          if (lowerName.endsWith('.ppt')) {
-            throw new Error('El formato .ppt antiguo no está soportado. Por favor, conviértelo a .pptx.');
-          }
-          if (!window.JSZip) {
-            throw new Error('La librería JSZip no está cargada.');
-          }
-          const buffer = await readFileAsArrayBuffer(file);
-          const zip = await JSZip.loadAsync(buffer);
-          let pptxText = "";
-          
-          const slideFiles = Object.keys(zip.files).filter(name => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'));
-          slideFiles.sort((a, b) => {
-            const numA = parseInt(a.replace(/[^\d]/g, ''));
-            const numB = parseInt(b.replace(/[^\d]/g, ''));
-            return numA - numB;
-          });
-          
-          for (const slideFile of slideFiles) {
-            const slideXml = await zip.files[slideFile].async("string");
-            const regex = /<a:t>([\s\S]*?)<\/a:t>/g;
-            let match;
-            let slideContent = "";
-            while ((match = regex.exec(slideXml)) !== null) {
-              const text = match[1].replace(/&amp;/g, '&')
-                                   .replace(/&lt;/g, '<')
-                                   .replace(/&gt;/g, '>')
-                                   .replace(/&quot;/g, '"')
-                                   .replace(/&#39;/g, "'");
-              slideContent += text + " ";
-            }
-            const slideNum = slideFile.replace(/[^\d]/g, '');
-            pptxText += `--- Diapositiva ${slideNum} ---\n${slideContent.trim()}\n`;
-          }
-          content = pptxText;
-        } else if(isText){
-          content = await readFileAsText(file);
-        } else {
-          setError('Formato no admitido: ' + file.name + '. Se admiten PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS y PPTX.');
-          continue;
-        }
+        // Extraer texto usando la función helper reutilizable
+        const parsed = await extractTextFromFile(file);
+        content = parsed.content;
+        pdfImages = parsed.pdfImages;
 
         let truncated = false;
         if(content.length > MAX_TEXT_CHARS_PER_FILE){
