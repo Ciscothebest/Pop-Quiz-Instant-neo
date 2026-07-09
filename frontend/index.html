@@ -2234,9 +2234,9 @@
   }
 
   async function getOneDriveToken() {
-    if (state.onedriveAccessToken) {
-      return state.onedriveAccessToken;
-    }
+    const username = localStorage.getItem('username') || 'default_user';
+    const activityKey = 'od_last_activity_' + username;
+    const accountIdKey = 'od_account_id_' + username;
 
     const config = state.cloudConfig || {};
     if (!config.onedriveClientId) {
@@ -2248,19 +2248,64 @@
         clientId: config.onedriveClientId,
         authority: "https://login.microsoftonline.com/common",
         redirectUri: window.location.origin
+      },
+      cache: {
+        cacheLocation: "localStorage",
+        storeAuthStateInCookie: true
       }
     };
 
     const msalInstance = new msal.PublicClientApplication(msalConfig);
     await msalInstance.initialize();
 
+    // Comprobar si han pasado más de 24 horas de inactividad
+    const lastActivity = localStorage.getItem(activityKey);
+    const limit = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
+
+    if (lastActivity) {
+      const elapsed = Date.now() - parseInt(lastActivity, 10);
+      if (elapsed > limit) {
+        // Excedido el límite de inactividad, limpiar caché local del usuario para forzar login
+        localStorage.removeItem(activityKey);
+        localStorage.removeItem(accountIdKey);
+        state.onedriveAccessToken = null;
+      }
+    }
+
+    // Intentar obtener el token de forma silenciosa para el usuario actual
+    const savedAccountId = localStorage.getItem(accountIdKey);
+    if (savedAccountId) {
+      try {
+        const account = msalInstance.getAccountByHomeId(savedAccountId);
+        if (account) {
+          const silentRequest = {
+            scopes: ["Files.ReadWrite", "Files.Read", "User.Read"],
+            account: account
+          };
+          const silentResponse = await msalInstance.acquireTokenSilent(silentRequest);
+          state.onedriveAccessToken = silentResponse.accessToken;
+          // Actualizar marca de actividad
+          localStorage.setItem(activityKey, Date.now().toString());
+          return silentResponse.accessToken;
+        }
+      } catch (silentError) {
+        console.warn("No se pudo obtener el token silenciosamente, procediendo a popup:", silentError);
+      }
+    }
+
+    // Si no hay cuenta guardada o falló el método silencioso, abrir loginPopup
     try {
       const loginRequest = {
         scopes: ["Files.ReadWrite", "Files.Read", "User.Read"],
-        prompt: "select_account" // Forzar a Microsoft a pedir la selección de cuenta
+        prompt: "select_account"
       };
       const response = await msalInstance.loginPopup(loginRequest);
       state.onedriveAccessToken = response.accessToken;
+      
+      // Guardar asociación de cuenta y tiempo de actividad
+      localStorage.setItem(accountIdKey, response.account.homeAccountId);
+      localStorage.setItem(activityKey, Date.now().toString());
+      
       return response.accessToken;
     } catch (err) {
       throw new Error('Autenticación de OneDrive fallida: ' + err.message);
@@ -4842,19 +4887,6 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
     els.authUsername.value = '';
     els.authPassword.value = '';
     
-    // Limpiar claves de caché de MSAL/OneDrive en localStorage y sessionStorage
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('msal.') || key.includes('microsoft') || key.startsWith('msal:'))) {
-        localStorage.removeItem(key);
-      }
-    }
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const key = sessionStorage.key(i);
-      if (key && (key.startsWith('msal.') || key.includes('microsoft') || key.startsWith('msal:'))) {
-        sessionStorage.removeItem(key);
-      }
-    }
     state.onedriveAccessToken = null;
     
     // Clear local state
