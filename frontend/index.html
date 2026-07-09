@@ -1871,6 +1871,337 @@ content = fullText;
       showCustomAlert('Error', 'No se pudo procesar la eliminación: ' + e.message);
     }
   }
+  async function loadCloudConfig() {
+    try {
+      const res = await fetch('/api/config/cloud');
+      if (res.ok) {
+        state.cloudConfig = await res.json();
+      }
+    } catch (e) {
+      console.warn('Error al cargar configuración de nube:', e);
+      state.cloudConfig = { googleClientId: '', googleApiKey: '', onedriveClientId: '' };
+    }
+  }
+
+  function openCloudConfigModal() {
+    const config = state.cloudConfig || { googleClientId: '', googleApiKey: '', onedriveClientId: '' };
+    document.getElementById('cfgGoogleClientId').value = config.googleClientId || '';
+    document.getElementById('cfgGoogleApiKey').value = config.googleApiKey || '';
+    document.getElementById('cfgOneDriveClientId').value = config.onedriveClientId || '';
+    document.getElementById('cloudConfigModalOverlay').classList.remove('hidden');
+  }
+
+  function closeCloudConfigModal() {
+    document.getElementById('cloudConfigModalOverlay').classList.add('hidden');
+  }
+
+  async function saveCloudConfig() {
+    const googleClientId = document.getElementById('cfgGoogleClientId').value.trim();
+    const googleApiKey = document.getElementById('cfgGoogleApiKey').value.trim();
+    const onedriveClientId = document.getElementById('cfgOneDriveClientId').value.trim();
+
+    try {
+      showScreen('loading');
+      const res = await fetch('/api/config/cloud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ googleClientId, googleApiKey, onedriveClientId })
+      });
+      
+      if (!res.ok) throw new Error('Error al guardar credenciales en el servidor.');
+      
+      state.cloudConfig = { googleClientId, googleApiKey, onedriveClientId };
+      closeCloudConfigModal();
+      showScreen('library');
+      showCustomAlert('Guardado', 'Configuración de cuentas de nube guardada con éxito.');
+    } catch (e) {
+      showScreen('library');
+      showCustomAlert('Error', 'No se pudo guardar la configuración: ' + e.message);
+    }
+  }
+
+  async function getValidGoogleToken() {
+    if (state.googleAccessToken) {
+      return state.googleAccessToken;
+    }
+
+    return new Promise((resolve, reject) => {
+      const config = state.cloudConfig || {};
+      if (!config.googleClientId) {
+        reject(new Error('Falta configurar el Client ID de Google Drive en Cuentas de Nube.'));
+        return;
+      }
+
+      try {
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: config.googleClientId,
+          scope: 'https://www.googleapis.com/auth/drive.readonly',
+          callback: (response) => {
+            if (response.error !== undefined) {
+              reject(new Error(response.error));
+            } else {
+              state.googleAccessToken = response.access_token;
+              resolve(response.access_token);
+            }
+          },
+        });
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+      } catch (err) {
+        reject(new Error('Error al iniciar autenticación con Google: ' + err.message));
+      }
+    });
+  }
+
+  async function openGooglePicker() {
+    try {
+      const config = state.cloudConfig || {};
+      if (!config.googleClientId || !config.googleApiKey) {
+        showCustomAlert('Falta Configuración', 'Configura tu Client ID y API Key de Google Drive en el panel ⚙️ Cuentas de Nube.');
+        return;
+      }
+
+      const token = await getValidGoogleToken();
+      
+      const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
+        .setMimeTypes('application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain')
+        .setSelectFolderEnabled(false);
+
+      const picker = new google.picker.PickerBuilder()
+        .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+        .setDeveloperKey(config.googleApiKey)
+        .setAppId(config.googleClientId)
+        .setOAuthToken(token)
+        .addView(view)
+        .setCallback(async (data) => {
+          if (data.action === google.picker.Action.PICKED) {
+            const documents = data.docs;
+            for (const doc of documents) {
+              const fileId = `gd_${doc.id}`;
+              const fileName = doc.name;
+              const sizeLabel = doc.sizeBytes ? `${(doc.sizeBytes / 1024).toFixed(1)} KB` : 'Nube';
+              const mediaType = doc.mimeType || 'text/plain';
+              
+              const originalData = JSON.stringify({
+                provider: 'google-drive',
+                fileId: doc.id,
+                mimeType: doc.mimeType,
+                downloadUrl: doc.url
+              });
+
+              try {
+                const res = await fetch('/api/files', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    id: fileId,
+                    name: fileName + ' (Google Drive)',
+                    content: '',
+                    sizeLabel: sizeLabel,
+                    originalData: originalData,
+                    mediaType: mediaType,
+                    pdfImages: []
+                  })
+                });
+                
+                if (res.ok) {
+                  await loadDatabaseState();
+                  renderLibraryLists();
+                } else {
+                  const errData = await res.json();
+                  showCustomAlert('Error', errData.error || 'No se pudo vincular el archivo.');
+                }
+              } catch (e) {
+                console.error('Error al guardar archivo en base de datos:', e);
+              }
+            }
+          }
+        })
+        .build();
+      picker.setVisible(true);
+    } catch (e) {
+      showCustomAlert('Error', e.message);
+    }
+  }
+
+  async function getOneDriveToken() {
+    if (state.onedriveAccessToken) {
+      return state.onedriveAccessToken;
+    }
+
+    const config = state.cloudConfig || {};
+    if (!config.onedriveClientId) {
+      throw new Error('Falta configurar el Client ID de OneDrive en Cuentas de Nube.');
+    }
+
+    const msalConfig = {
+      auth: {
+        clientId: config.onedriveClientId,
+        authority: "https://login.microsoftonline.com/common",
+        redirectUri: window.location.origin
+      }
+    };
+
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+
+    try {
+      const loginRequest = {
+        scopes: ["Files.Read", "User.Read"]
+      };
+      const response = await msalInstance.loginPopup(loginRequest);
+      state.onedriveAccessToken = response.accessToken;
+      return response.accessToken;
+    } catch (err) {
+      throw new Error('Autenticación de OneDrive fallida: ' + err.message);
+    }
+  }
+
+  async function openOneDrivePicker() {
+    try {
+      const config = state.cloudConfig || {};
+      if (!config.onedriveClientId) {
+        showCustomAlert('Falta Configuración', 'Configura tu Client ID de OneDrive en el panel ⚙️ Cuentas de Nube.');
+        return;
+      }
+
+      const odOptions = {
+        clientId: config.onedriveClientId,
+        action: "download",
+        multiSelect: true,
+        openInNewWindow: true,
+        success: async (files) => {
+          if (files && files.value) {
+            for (const file of files.value) {
+              const fileId = `od_${file.id}`;
+              const fileName = file.name;
+              const sizeLabel = file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'Nube';
+              const mediaType = file.file ? file.file.mimeType : 'application/octet-stream';
+              
+              const originalData = JSON.stringify({
+                provider: 'onedrive',
+                fileId: file.id,
+                downloadUrl: file["@microsoft.graph.downloadUrl"]
+              });
+
+              try {
+                const res = await fetch('/api/files', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    id: fileId,
+                    name: fileName + ' (OneDrive)',
+                    content: '',
+                    sizeLabel: sizeLabel,
+                    originalData: originalData,
+                    mediaType: mediaType,
+                    pdfImages: []
+                  })
+                });
+                
+                if (res.ok) {
+                  await loadDatabaseState();
+                  renderLibraryLists();
+                } else {
+                  const errData = await res.json();
+                  showCustomAlert('Error', errData.error || 'No se pudo vincular el archivo.');
+                }
+              } catch (e) {
+                console.error('Error al guardar archivo de OneDrive en base de datos:', e);
+              }
+            }
+          }
+        },
+        cancel: () => {
+          console.log("OneDrive picker cancelado.");
+        },
+        error: (err) => {
+          showCustomAlert('Error de OneDrive', err);
+        }
+      };
+
+      OneDrive.open(odOptions);
+    } catch (e) {
+      showCustomAlert('Error', e.message);
+    }
+  }
+
+  async function loadAndExtractCloudFile(file) {
+    let meta;
+    try {
+      meta = JSON.parse(file.original_data);
+    } catch (e) {
+      throw new Error('Metadatos de archivo de la nube inválidos.');
+    }
+
+    let blob;
+    if (meta.provider === 'google-drive') {
+      const accessToken = await getValidGoogleToken();
+      const fileId = meta.fileId;
+      const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
+
+      if (isGoogleDoc) {
+        const isPdf = file.media_type === 'application/pdf' || (meta.mimeType && meta.mimeType === 'application/pdf') || file.name.endsWith('.pdf');
+        const mimeType = isPdf ? 'application/pdf' : 'text/plain';
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${mimeType}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!res.ok) throw new Error('Error al exportar documento de Google Drive');
+        blob = await res.blob();
+      } else {
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!res.ok) throw new Error('Error al descargar archivo de Google Drive');
+        blob = await res.blob();
+      }
+    } else if (meta.provider === 'onedrive') {
+      const fileId = meta.fileId;
+      let downloadSuccess = false;
+
+      if (meta.downloadUrl) {
+        try {
+          const res = await fetch(meta.downloadUrl);
+          if (res.ok) {
+            blob = await res.blob();
+            downloadSuccess = true;
+          }
+        } catch (e) {
+          console.warn("La URL de descarga guardada de OneDrive falló, obteniendo una fresca:", e);
+        }
+      }
+
+      if (!downloadSuccess) {
+        const token = await getOneDriveToken();
+        const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Error al obtener metadatos de OneDrive');
+        const data = await res.json();
+        const freshUrl = data['@microsoft.graph.downloadUrl'];
+        if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
+
+        const fileRes = await fetch(freshUrl);
+        if (!fileRes.ok) throw new Error('Error al descargar de OneDrive');
+        blob = await fileRes.blob();
+      }
+    }
+
+    if (!blob) {
+      throw new Error('No se pudo descargar el archivo.');
+    }
+
+    const parsedFile = new File([blob], file.name, { type: blob.type });
+    const parsed = await extractTextFromFile(parsedFile);
+    return parsed.content;
+  }
+
+  // Bind clicks for the cloud config modal cancel and save buttons
+  document.addEventListener('DOMContentLoaded', () => {
+    const btnCancel = document.getElementById('btnCloudConfigCancel');
+    const btnSave = document.getElementById('btnCloudConfigSave');
+    if (btnCancel) btnCancel.addEventListener('click', closeCloudConfigModal);
+    if (btnSave) btnSave.addEventListener('click', saveCloudConfig);
+  });
 
   let currentPreviewUrl = null;
 
