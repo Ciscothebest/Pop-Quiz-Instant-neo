@@ -5,6 +5,12 @@ echo   Iniciando Servidor de Generador de Examenes IA
 echo ===================================================
 echo:
 
+:: Buscar y liberar el puerto 3000 si está ocupado
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') do (
+  echo Liberando puerto 3000...
+  taskkill /f /pid %%a >nul 2>&1
+)
+
 :: Cambiar al directorio del backend
 cd /d "%~dp0\backend"
 
