@@ -2240,7 +2240,7 @@
 
     const config = state.cloudConfig || {};
     if (!config.onedriveClientId) {
-      throw new Error('Falta configurar el Client ID de OneDrive en Cuentas de Nube.');
+      throw new Error('Falta configurar el Client ID de OneDrive en el archivo .env de tu servidor.');
     }
 
     const msalConfig = {
@@ -2256,7 +2256,8 @@
 
     try {
       const loginRequest = {
-        scopes: ["Files.ReadWrite", "Files.Read", "User.Read"]
+        scopes: ["Files.ReadWrite", "Files.Read", "User.Read"],
+        prompt: "select_account" // Forzar a Microsoft a pedir la selección de cuenta
       };
       const response = await msalInstance.loginPopup(loginRequest);
       state.onedriveAccessToken = response.accessToken;
@@ -2270,7 +2271,7 @@
     try {
       const config = state.cloudConfig || {};
       if (!config.onedriveClientId) {
-        showCustomAlert('Falta Configuración', 'Configura tu Client ID de OneDrive en el panel ⚙️ Cuentas de Nube.');
+        showCustomAlert('Falta Configuración', 'Falta configurar el Client ID de OneDrive en el archivo .env de tu servidor.');
         return;
       }
 
@@ -4840,6 +4841,21 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
     localStorage.removeItem('username');
     els.authUsername.value = '';
     els.authPassword.value = '';
+    
+    // Limpiar claves de caché de MSAL/OneDrive en localStorage y sessionStorage
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('msal.') || key.includes('microsoft') || key.startsWith('msal:'))) {
+        localStorage.removeItem(key);
+      }
+    }
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key && (key.startsWith('msal.') || key.includes('microsoft') || key.startsWith('msal:'))) {
+        sessionStorage.removeItem(key);
+      }
+    }
+    state.onedriveAccessToken = null;
     
     // Clear local state
     state.questions = [];
