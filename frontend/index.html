@@ -2171,45 +2171,51 @@
         .addView(view)
         .setCallback(async (data) => {
           if (data.action === google.picker.Action.PICKED) {
-            const documents = data.docs;
-            for (const doc of documents) {
-              const fileId = `gd_${doc.id}`;
-              const fileName = doc.name;
-              const sizeLabel = doc.sizeBytes ? `${(doc.sizeBytes / 1024).toFixed(1)} KB` : 'Nube';
-              const mediaType = doc.mimeType || 'text/plain';
-              
-              const originalData = JSON.stringify({
-                provider: 'google-drive',
-                fileId: doc.id,
-                mimeType: doc.mimeType,
-                downloadUrl: doc.url
-              });
-
-              try {
-                const res = await fetch('/api/files', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    id: fileId,
-                    name: fileName + ' (Google Drive)',
-                    content: '',
-                    sizeLabel: sizeLabel,
-                    originalData: originalData,
-                    mediaType: mediaType,
-                    pdfImages: []
-                  })
-                });
+            els.loadingMsg.textContent = 'Vinculando archivos de Google Drive...';
+            showScreen('loading');
+            try {
+              const documents = data.docs;
+              for (const doc of documents) {
+                const fileId = `gd_${doc.id}`;
+                const fileName = doc.name;
+                const sizeLabel = doc.sizeBytes ? `${(doc.sizeBytes / 1024).toFixed(1)} KB` : 'Nube';
+                const mediaType = doc.mimeType || 'text/plain';
                 
-                if (res.ok) {
-                  await loadDatabaseState();
-                  renderLibraryLists();
-                } else {
-                  const errData = await res.json();
-                  showCustomAlert('Error', errData.error || 'No se pudo vincular el archivo.');
+                const originalData = JSON.stringify({
+                  provider: 'google-drive',
+                  fileId: doc.id,
+                  mimeType: doc.mimeType,
+                  downloadUrl: doc.url
+                });
+
+                try {
+                  const res = await fetch('/api/files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: fileId,
+                      name: fileName + ' (Google Drive)',
+                      content: '',
+                      sizeLabel: sizeLabel,
+                      originalData: originalData,
+                      mediaType: mediaType,
+                      pdfImages: []
+                    })
+                  });
+                  
+                  if (res.ok) {
+                    await loadDatabaseState();
+                    renderLibraryLists();
+                  } else {
+                    const errData = await res.json();
+                    showCustomAlert('Error', errData.error || 'No se pudo vincular el archivo.');
+                  }
+                } catch (e) {
+                  console.error('Error al guardar archivo en base de datos:', e);
                 }
-              } catch (e) {
-                console.error('Error al guardar archivo en base de datos:', e);
               }
+            } finally {
+              showScreen('library');
             }
           }
         })
@@ -2273,43 +2279,49 @@
         },
         success: async (files) => {
           if (files && files.value) {
-            for (const file of files.value) {
-              const fileId = `od_${file.id}`;
-              const fileName = file.name;
-              const sizeLabel = file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'Nube';
-              const mediaType = file.file ? file.file.mimeType : 'application/octet-stream';
-              
-              const originalData = JSON.stringify({
-                provider: 'onedrive',
-                fileId: file.id,
-                downloadUrl: file["@microsoft.graph.downloadUrl"]
-              });
-
-              try {
-                const res = await fetch('/api/files', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    id: fileId,
-                    name: fileName + ' (OneDrive)',
-                    content: '',
-                    sizeLabel: sizeLabel,
-                    originalData: originalData,
-                    mediaType: mediaType,
-                    pdfImages: []
-                  })
-                });
+            els.loadingMsg.textContent = 'Vinculando archivos de OneDrive...';
+            showScreen('loading');
+            try {
+              for (const file of files.value) {
+                const fileId = `od_${file.id}`;
+                const fileName = file.name;
+                const sizeLabel = file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'Nube';
+                const mediaType = file.file ? file.file.mimeType : 'application/octet-stream';
                 
-                if (res.ok) {
-                  await loadDatabaseState();
-                  renderLibraryLists();
-                } else {
-                  const errData = await res.json();
-                  showCustomAlert('Error', errData.error || 'No se pudo vincular el archivo.');
+                const originalData = JSON.stringify({
+                  provider: 'onedrive',
+                  fileId: file.id,
+                  downloadUrl: file["@microsoft.graph.downloadUrl"]
+                });
+
+                try {
+                  const res = await fetch('/api/files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: fileId,
+                      name: fileName + ' (OneDrive)',
+                      content: '',
+                      sizeLabel: sizeLabel,
+                      originalData: originalData,
+                      mediaType: mediaType,
+                      pdfImages: []
+                    })
+                  });
+                  
+                  if (res.ok) {
+                    await loadDatabaseState();
+                    renderLibraryLists();
+                  } else {
+                    const errData = await res.json();
+                    showCustomAlert('Error', errData.error || 'No se pudo vincular el archivo.');
+                  }
+                } catch (e) {
+                  console.error('Error al guardar archivo de OneDrive en base de datos:', e);
                 }
-              } catch (e) {
-                console.error('Error al guardar archivo de OneDrive en base de datos:', e);
               }
+            } finally {
+              showScreen('library');
             }
           }
         },
@@ -2337,6 +2349,35 @@
     }
   }
 
+  function downloadFileWithProgress(url, headers = {}, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url);
+      xhr.responseType = 'blob';
+      
+      Object.keys(headers).forEach(key => {
+        xhr.setRequestHeader(key, headers[key]);
+      });
+      
+      xhr.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(e.loaded, e.total);
+        }
+      });
+      
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(xhr.response);
+        } else {
+          reject(new Error(`Error de descarga (${xhr.status})`));
+        }
+      };
+      
+      xhr.onerror = () => reject(new Error('Error de red al descargar el archivo'));
+      xhr.send();
+    });
+  }
+
   async function loadAndExtractCloudFile(file) {
     let meta;
     try {
@@ -2345,57 +2386,73 @@
       throw new Error('Metadatos de archivo de la nube inválidos.');
     }
 
+    // Inicializar barra de progreso
+    els.uploadProgressBar.style.width = '0%';
+    els.uploadProgressPercentage.textContent = '0%';
+    els.uploadProgressContainer.classList.remove('hidden');
+
     let blob;
-    if (meta.provider === 'google-drive') {
-      const accessToken = await getValidGoogleToken();
-      const fileId = meta.fileId;
-      const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
+    try {
+      if (meta.provider === 'google-drive') {
+        const accessToken = await getValidGoogleToken();
+        const fileId = meta.fileId;
+        const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
 
-      if (isGoogleDoc) {
-        const isPdf = file.media_type === 'application/pdf' || (meta.mimeType && meta.mimeType === 'application/pdf') || file.name.endsWith('.pdf');
-        const mimeType = isPdf ? 'application/pdf' : 'text/plain';
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${mimeType}`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!res.ok) throw new Error('Error al exportar documento de Google Drive');
-        blob = await res.blob();
-      } else {
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!res.ok) throw new Error('Error al descargar archivo de Google Drive');
-        blob = await res.blob();
-      }
-    } else if (meta.provider === 'onedrive') {
-      const fileId = meta.fileId;
-      let downloadSuccess = false;
+        if (isGoogleDoc) {
+          const isPdf = file.media_type === 'application/pdf' || (meta.mimeType && meta.mimeType === 'application/pdf') || file.name.endsWith('.pdf');
+          const mimeType = isPdf ? 'application/pdf' : 'text/plain';
+          blob = await downloadFileWithProgress(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${mimeType}`, {
+            'Authorization': `Bearer ${accessToken}`
+          }, (loaded, total) => {
+            const pct = Math.round((loaded / total) * 100);
+            els.uploadProgressBar.style.width = `${pct}%`;
+            els.uploadProgressPercentage.textContent = `${pct}%`;
+          });
+        } else {
+          blob = await downloadFileWithProgress(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+            'Authorization': `Bearer ${accessToken}`
+          }, (loaded, total) => {
+            const pct = Math.round((loaded / total) * 100);
+            els.uploadProgressBar.style.width = `${pct}%`;
+            els.uploadProgressPercentage.textContent = `${pct}%`;
+          });
+        }
+      } else if (meta.provider === 'onedrive') {
+        const fileId = meta.fileId;
+        let downloadSuccess = false;
 
-      if (meta.downloadUrl) {
-        try {
-          const res = await fetch(meta.downloadUrl);
-          if (res.ok) {
-            blob = await res.blob();
+        if (meta.downloadUrl) {
+          try {
+            blob = await downloadFileWithProgress(meta.downloadUrl, {}, (loaded, total) => {
+              const pct = Math.round((loaded / total) * 100);
+              els.uploadProgressBar.style.width = `${pct}%`;
+              els.uploadProgressPercentage.textContent = `${pct}%`;
+            });
             downloadSuccess = true;
+          } catch (e) {
+            console.warn("La URL de descarga guardada de OneDrive falló, obteniendo una fresca:", e);
           }
-        } catch (e) {
-          console.warn("La URL de descarga guardada de OneDrive falló, obteniendo una fresca:", e);
+        }
+
+        if (!downloadSuccess) {
+          const token = await getOneDriveToken();
+          const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error('Error al obtener metadatos de OneDrive');
+          const data = await res.json();
+          const freshUrl = data['@microsoft.graph.downloadUrl'];
+          if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
+
+          blob = await downloadFileWithProgress(freshUrl, {}, (loaded, total) => {
+            const pct = Math.round((loaded / total) * 100);
+            els.uploadProgressBar.style.width = `${pct}%`;
+            els.uploadProgressPercentage.textContent = `${pct}%`;
+          });
         }
       }
-
-      if (!downloadSuccess) {
-        const token = await getOneDriveToken();
-        const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error('Error al obtener metadatos de OneDrive');
-        const data = await res.json();
-        const freshUrl = data['@microsoft.graph.downloadUrl'];
-        if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
-
-        const fileRes = await fetch(freshUrl);
-        if (!fileRes.ok) throw new Error('Error al descargar de OneDrive');
-        blob = await fileRes.blob();
-      }
+    } finally {
+      els.uploadProgressContainer.classList.add('hidden');
     }
 
     if (!blob) {
@@ -2425,59 +2482,74 @@
       throw new Error('Metadatos de archivo de la nube inválidos.');
     }
 
+    // Inicializar barra de progreso
+    els.uploadProgressBar.style.width = '0%';
+    els.uploadProgressPercentage.textContent = '0%';
+    els.uploadProgressContainer.classList.remove('hidden');
+
     let blob;
     let isPdf = file.media_type === 'application/pdf' || (meta.mimeType && meta.mimeType === 'application/pdf');
 
-    if (meta.provider === 'google-drive') {
-      const accessToken = await getValidGoogleToken();
-      const fileId = meta.fileId;
-      const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
+    try {
+      if (meta.provider === 'google-drive') {
+        const accessToken = await getValidGoogleToken();
+        const fileId = meta.fileId;
+        const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
 
-      if (isGoogleDoc) {
-        // Exporte de archivos Google Workspace como PDF o Texto Plano
-        const mimeType = isPdf ? 'application/pdf' : 'text/plain';
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${mimeType}`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!res.ok) throw new Error('Error al exportar de Google Drive');
-        blob = await res.blob();
-      } else {
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!res.ok) throw new Error('Error al descargar de Google Drive');
-        blob = await res.blob();
-      }
-    } else if (meta.provider === 'onedrive') {
-      const fileId = meta.fileId;
-      let downloadSuccess = false;
+        if (isGoogleDoc) {
+          const mimeType = isPdf ? 'application/pdf' : 'text/plain';
+          blob = await downloadFileWithProgress(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${mimeType}`, {
+            'Authorization': `Bearer ${accessToken}`
+          }, (loaded, total) => {
+            const pct = Math.round((loaded / total) * 100);
+            els.uploadProgressBar.style.width = `${pct}%`;
+            els.uploadProgressPercentage.textContent = `${pct}%`;
+          });
+        } else {
+          blob = await downloadFileWithProgress(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+            'Authorization': `Bearer ${accessToken}`
+          }, (loaded, total) => {
+            const pct = Math.round((loaded / total) * 100);
+            els.uploadProgressBar.style.width = `${pct}%`;
+            els.uploadProgressPercentage.textContent = `${pct}%`;
+          });
+        }
+      } else if (meta.provider === 'onedrive') {
+        const fileId = meta.fileId;
+        let downloadSuccess = false;
 
-      if (meta.downloadUrl) {
-        try {
-          const res = await fetch(meta.downloadUrl);
-          if (res.ok) {
-            blob = await res.blob();
+        if (meta.downloadUrl) {
+          try {
+            blob = await downloadFileWithProgress(meta.downloadUrl, {}, (loaded, total) => {
+              const pct = Math.round((loaded / total) * 100);
+              els.uploadProgressBar.style.width = `${pct}%`;
+              els.uploadProgressPercentage.textContent = `${pct}%`;
+            });
             downloadSuccess = true;
+          } catch (e) {
+            console.warn("Stored OneDrive URL failed, acquiring fresh one:", e);
           }
-        } catch (e) {
-          console.warn("Stored OneDrive URL failed, acquiring fresh one:", e);
+        }
+
+        if (!downloadSuccess) {
+          const token = await getOneDriveToken();
+          const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error('Error al obtener metadatos de OneDrive');
+          const data = await res.json();
+          const freshUrl = data['@microsoft.graph.downloadUrl'];
+          if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
+
+          blob = await downloadFileWithProgress(freshUrl, {}, (loaded, total) => {
+            const pct = Math.round((loaded / total) * 100);
+            els.uploadProgressBar.style.width = `${pct}%`;
+            els.uploadProgressPercentage.textContent = `${pct}%`;
+          });
         }
       }
-
-      if (!downloadSuccess) {
-        const token = await getOneDriveToken();
-        const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error('Error al obtener metadatos de OneDrive');
-        const data = await res.json();
-        const freshUrl = data['@microsoft.graph.downloadUrl'];
-        if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
-
-        const fileRes = await fetch(freshUrl);
-        if (!fileRes.ok) throw new Error('Error al descargar de OneDrive');
-        blob = await fileRes.blob();
-      }
+    } finally {
+      els.uploadProgressContainer.classList.add('hidden');
     }
 
     if (isPdf || (blob && blob.type === 'application/pdf')) {
