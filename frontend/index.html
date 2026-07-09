@@ -1256,7 +1256,9 @@
   // CONFIGURACION DE PRODUCCION (MANUAL):
   // Si deseas desplegar el frontend en Netlify y el backend en Render, coloca aquí la URL de tu Render (ej: 'https://mi-backend.onrender.com').
   // Déjalo vacío ('') si vas a desplegar todo junto en Render.
-  const API_BASE_URL = 'https://pop-quiz-instant-neo.onrender.com';
+  const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? ''
+    : 'https://pop-quiz-instant-neo.onrender.com';
 
   // Global fetch wrapper to inject x-username header for authentication
   const originalFetch = window.fetch;
