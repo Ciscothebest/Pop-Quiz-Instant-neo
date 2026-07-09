@@ -1952,6 +1952,31 @@ content = fullText;
     });
   }
 
+  function loadGooglePickerLib() {
+    return new Promise((resolve, reject) => {
+      if (window.google && window.google.picker) {
+        resolve();
+        return;
+      }
+      if (!window.gapi) {
+        reject(new Error('La librería loader de Google (gapi) no se cargó correctamente.'));
+        return;
+      }
+      gapi.load('picker', {
+        callback: () => {
+          if (window.google && window.google.picker) {
+            resolve();
+          } else {
+            reject(new Error('No se pudo inicializar el Google Picker.'));
+          }
+        },
+        onerror: () => {
+          reject(new Error('Fallo al descargar la librería de Google Picker.'));
+        }
+      });
+    });
+  }
+
   async function openGooglePicker() {
     try {
       const config = state.cloudConfig || {};
@@ -1960,7 +1985,10 @@ content = fullText;
         return;
       }
 
+      showScreen('loading');
+      await loadGooglePickerLib();
       const token = await getValidGoogleToken();
+      showScreen('library');
       
       const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
         .setMimeTypes('application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain')
@@ -2019,6 +2047,7 @@ content = fullText;
         .build();
       picker.setVisible(true);
     } catch (e) {
+      showScreen('library');
       showCustomAlert('Error', e.message);
     }
   }
