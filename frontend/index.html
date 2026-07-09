@@ -1123,8 +1123,11 @@
   <!-- FILE PREVIEW SCREEN -->
   <section id="screen-file-preview" class="card hidden">
     <div class="card-inner">
-      <div class="history-header">
-        <h2 id="previewFileName" style="font-family:'Caveat', cursive; font-size:2rem; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 400px;">Vista previa</h2>
+      <div class="history-header" style="flex-wrap: wrap; gap: 8px; align-items: center;">
+        <div style="flex: 1; min-width: 250px;">
+          <h2 id="previewFileName" style="font-family:'Caveat', cursive; font-size:2rem; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 400px;">Vista previa</h2>
+          <p id="previewFormatHint" style="margin: 2px 0 0; font-size: 0.8rem; color: var(--ink-soft); font-family: 'Inter', sans-serif; display:none;"></p>
+        </div>
         <button class="btn-secondary" id="btnBackToLibraryFromPreview" style="margin-top:0; width:auto;">← Volver</button>
       </div>
       
@@ -1132,8 +1135,9 @@
         <!-- Vista previa original dinámica (iframe para PDFs / texto formateado) -->
       </div>
       
-      <div class="results-actions" style="display:flex; gap:12px; margin-top:20px;">
+      <div class="results-actions" style="display:flex; gap:12px; margin-top:20px; flex-wrap: wrap;">
         <button class="btn-primary" id="btnDownloadFile" style="margin-top:0; width:auto;">📥 Descargar Original</button>
+        <button class="btn-secondary" id="btnOpenInCloud" style="margin-top:0; width:auto; display:none;">☁️ Abrir en OneDrive</button>
         <button class="btn-secondary" id="btnDeleteFileFromPreview" style="margin-top:0; width:auto; border-color: var(--pen-red); color: var(--pen-red);">🗑 Eliminar de la Biblioteca</button>
       </div>
     </div>
@@ -1374,7 +1378,9 @@
     detailReviewList: document.getElementById('detailReviewList'),
     detailGroupSelect: document.getElementById('detailGroupSelect'),
     previewFileName: document.getElementById('previewFileName'),
+    previewFormatHint: document.getElementById('previewFormatHint'),
     previewContainer: document.getElementById('previewContainer'),
+    btnOpenInCloud: document.getElementById('btnOpenInCloud'),
     libFileDrop: document.getElementById('libFileDrop'),
     libFileInput: document.getElementById('libFileInput'),
     libLibraryList: document.getElementById('libLibraryList'),
@@ -1825,7 +1831,8 @@
             originalData = JSON.stringify({
               provider: 'onedrive',
               fileId: driveItem.id,
-              downloadUrl: driveItem["@microsoft.graph.downloadUrl"]
+              downloadUrl: driveItem["@microsoft.graph.downloadUrl"],
+              webUrl: driveItem.webUrl
             });
             // Al guardarse en la nube, dejamos content vacío
             content = '';
@@ -2318,7 +2325,8 @@
                 const originalData = JSON.stringify({
                   provider: 'onedrive',
                   fileId: file.id,
-                  downloadUrl: file["@microsoft.graph.downloadUrl"]
+                  downloadUrl: file["@microsoft.graph.downloadUrl"],
+                  webUrl: file.webUrl
                 });
 
                 try {
@@ -2574,6 +2582,12 @@
           const freshUrl = data['@microsoft.graph.downloadUrl'];
           if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
 
+          if (data.webUrl) {
+            els.btnOpenInCloud.style.display = 'inline-block';
+            els.btnOpenInCloud.textContent = '☁️ Abrir en OneDrive';
+            els.btnOpenInCloud.onclick = () => window.open(data.webUrl, '_blank');
+          }
+
           blob = await downloadFileWithProgress(freshUrl, {}, updateProgress);
         }
       }
@@ -2621,6 +2635,44 @@
         currentPreviewUrl = null;
       }
 
+      // Check cloud metadata and setup Open in Cloud button
+      let webUrl = null;
+      let provider = '';
+      if (file.original_data) {
+        try {
+          const meta = JSON.parse(file.original_data);
+          provider = meta.provider;
+          if (meta.provider === 'onedrive') {
+            webUrl = meta.webUrl || null;
+          } else if (meta.provider === 'google-drive') {
+            webUrl = meta.downloadUrl || null;
+          }
+        } catch (e) {}
+      }
+
+      if (webUrl) {
+        els.btnOpenInCloud.style.display = 'inline-block';
+        els.btnOpenInCloud.textContent = provider === 'onedrive' ? '☁️ Abrir en OneDrive' : '☁️ Abrir en Google Drive';
+        els.btnOpenInCloud.onclick = () => window.open(webUrl, '_blank');
+      } else {
+        els.btnOpenInCloud.style.display = 'none';
+      }
+
+      const cleanName = file.name.replace(/ \(OneDrive\)$/i, '').replace(/ \(Google Drive\)$/i, '');
+      const isPdf = file.media_type === 'application/pdf' || cleanName.toLowerCase().endsWith('.pdf');
+
+      // Setup format hint
+      if (isPdf) {
+        els.previewFormatHint.style.display = 'none';
+      } else {
+        els.previewFormatHint.style.display = 'block';
+        if (webUrl) {
+          els.previewFormatHint.textContent = `Mostrando texto plano extraído. Haz clic en "Abrir en ${provider === 'onedrive' ? 'OneDrive' : 'Google Drive'}" para ver con todo su formato y estilos originales.`;
+        } else {
+          els.previewFormatHint.textContent = 'Mostrando texto plano extraído. Descarga el archivo para verlo con su formato original.';
+        }
+      }
+
       const isCloudFile = file.id.startsWith('gd_') || file.id.startsWith('od_') || (file.original_data && (file.original_data.includes('"google-drive"') || file.original_data.includes('"onedrive"')));
 
       // Cambiar a la pantalla de vista previa de inmediato
@@ -2642,8 +2694,6 @@
         `;
         await showCloudFilePreview(file);
       } else {
-        const cleanName = file.name.replace(/ \(OneDrive\)$/i, '').replace(/ \(Google Drive\)$/i, '');
-        const isPdf = file.media_type === 'application/pdf' || cleanName.toLowerCase().endsWith('.pdf');
         if (isPdf) {
           // Render exact original PDF inside an iframe
           const binaryString = atob(file.original_data);
