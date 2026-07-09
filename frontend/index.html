@@ -1636,11 +1636,78 @@
     return { content, pdfImages };
   }
 
+  async function uploadFileToOneDrive(file, token) {
+    const fileName = encodeURIComponent(file.name);
+    // Simple PUT upload for files <= 4MB
+    if (file.size <= 4 * 1024 * 1024) {
+      const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${fileName}:/content`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': file.type || 'application/octet-stream'
+        },
+        body: file
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error?.message || 'Error al subir a OneDrive');
+      }
+      return await res.json();
+    } else {
+      // Create Upload Session for files > 4MB
+      const sessionRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${fileName}:/createUploadSession`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          item: {
+            "@microsoft.graph.conflictBehavior": "replace",
+            "name": file.name
+          }
+        })
+      });
+      if (!sessionRes.ok) {
+        const errData = await sessionRes.json().catch(() => ({}));
+        throw new Error(errData.error?.message || 'Error al crear sesión de subida en OneDrive');
+      }
+      const sessionData = await sessionRes.json();
+      const uploadUrl = sessionData.uploadUrl;
+
+      // Upload file blob directly to uploadUrl
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Length': file.size,
+          'Content-Range': `bytes 0-${file.size - 1}/${file.size}`
+        },
+        body: file
+      });
+      if (!uploadRes.ok) {
+        throw new Error('Error al subir el archivo a la sesión de OneDrive');
+      }
+      return await uploadRes.json();
+    }
+  }
+
   async function handleFiles(fileListRaw, autoCheck = true){
     const files = Array.from(fileListRaw);
+    
+    // Comprobar si OneDrive está configurado para la subida automática
+    const config = state.cloudConfig || {};
+    let oneDriveToken = null;
+    if (config.onedriveClientId) {
+      try {
+        oneDriveToken = await getOneDriveToken();
+      } catch (e) {
+        console.warn("No se pudo obtener token de OneDrive para subida automática:", e);
+      }
+    }
+
     for(const file of files){
       // Check for duplicates
-      const existingFile = state.availableFiles.find(f => f.name === file.name);
+      const existingFile = state.availableFiles.find(f => f.name === file.name || f.name === file.name + ' (OneDrive)');
       if (existingFile) {
         await showCustomAlert('Archivo duplicado', `El archivo "${file.name}" ya existe en la biblioteca.`);
         
@@ -1675,13 +1742,40 @@
         let content = '';
         let originalData = '';
         let pdfImages = [];
+        let name = file.name;
+        let fileId = crypto.randomUUID();
 
-        originalData = await readFileAsBase64(file);
-
-        // Extraer texto usando la función helper reutilizable
-        const parsed = await extractTextFromFile(file);
-        content = parsed.content;
-        pdfImages = parsed.pdfImages;
+        if (oneDriveToken) {
+          els.loadingMsg.textContent = `Subiendo archivo a OneDrive: ${file.name}...`;
+          showScreen('loading');
+          try {
+            const driveItem = await uploadFileToOneDrive(file, oneDriveToken);
+            fileId = `od_${driveItem.id}`;
+            name = file.name + ' (OneDrive)';
+            originalData = JSON.stringify({
+              provider: 'onedrive',
+              fileId: driveItem.id,
+              downloadUrl: driveItem["@microsoft.graph.downloadUrl"]
+            });
+            // Al guardarse en la nube, dejamos content vacío
+            content = '';
+          } catch (uploadErr) {
+            console.error("Error al subir a OneDrive, cayendo a subida local:", uploadErr);
+            // Fallback a subida local clásica si falla la subida a nube
+            originalData = await readFileAsBase64(file);
+            const parsed = await extractTextFromFile(file);
+            content = parsed.content;
+            pdfImages = parsed.pdfImages;
+          } finally {
+            showScreen('library');
+          }
+        } else {
+          // Subida local normal
+          originalData = await readFileAsBase64(file);
+          const parsed = await extractTextFromFile(file);
+          content = parsed.content;
+          pdfImages = parsed.pdfImages;
+        }
 
         let truncated = false;
         if(content.length > MAX_TEXT_CHARS_PER_FILE){
@@ -1690,8 +1784,8 @@
         }
 
         const fileRecord = {
-          id: crypto.randomUUID(),
-          name: file.name,
+          id: fileId,
+          name: name,
           content: content,
           sizeLabel: formatSize(file.size) + (truncated ? ' · recortado' : ''),
           originalData: originalData,
