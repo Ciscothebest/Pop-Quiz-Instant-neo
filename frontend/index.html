@@ -956,7 +956,7 @@
       </div>
       <div class="file-drop" id="fileDrop">
         <input type="file" id="fileInput" multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.xls,.xlsx,.pptx">
-        <span class="file-drop-label"><b>Subir desde mi PC</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
+        <span class="file-drop-label" id="fileDropLabel"><b>Subir desde mi PC</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
       </div>
       <p class="hint">Si subes archivos, se guardarán en tu biblioteca y se seleccionarán automáticamente para este examen.</p>
  
@@ -1108,7 +1108,7 @@
       </div>
       <div class="file-drop" id="libFileDrop" style="margin-bottom: 20px;">
         <input type="file" id="libFileInput" multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.xls,.xlsx,.pptx">
-        <span class="file-drop-label"><b>Subir desde mi PC</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
+        <span class="file-drop-label" id="libFileDropLabel"><b>Subir desde mi PC</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
       </div>
       
       <label for="librarySearchInput" style="margin-top: 20px; margin-bottom: 6px;">Buscar en mis archivos</label>
@@ -1324,6 +1324,8 @@
     timerMinutes: document.getElementById('timerMinutes'),
     fileDrop: document.getElementById('fileDrop'),
     fileInput: document.getElementById('fileInput'),
+    fileDropLabel: document.getElementById('fileDropLabel'),
+    libFileDropLabel: document.getElementById('libFileDropLabel'),
     libSearchInput: document.getElementById('libSearchInput'),
     btnToggleLibDropdown: document.getElementById('btnToggleLibDropdown'),
     libSearchDropdown: document.getElementById('libSearchDropdown'),
@@ -2053,6 +2055,16 @@
       showCustomAlert('Error', 'No se pudo procesar la eliminación: ' + e.message);
     }
   }
+  function updateFileDropLabels() {
+    const config = state.cloudConfig || {};
+    const labelText = config.onedriveClientId 
+      ? '☁️ <b>Subir a OneDrive</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX'
+      : '<b>Subir desde mi PC</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX';
+      
+    if (els.fileDropLabel) els.fileDropLabel.innerHTML = labelText;
+    if (els.libFileDropLabel) els.libFileDropLabel.innerHTML = labelText;
+  }
+
   async function loadCloudConfig() {
     try {
       const res = await fetch('/api/config/cloud');
@@ -2063,6 +2075,7 @@
       console.warn('Error al cargar configuración de nube:', e);
       state.cloudConfig = { googleClientId: '', googleApiKey: '', onedriveClientId: '' };
     }
+    updateFileDropLabels();
   }
 
   function openCloudConfigModal() {
@@ -2093,6 +2106,7 @@
       if (!res.ok) throw new Error('Error al guardar credenciales en el servidor.');
       
       state.cloudConfig = { googleClientId, googleApiKey, onedriveClientId };
+      updateFileDropLabels();
       closeCloudConfigModal();
       showScreen('library');
       showCustomAlert('Guardado', 'Configuración de cuentas de nube guardada con éxito.');
