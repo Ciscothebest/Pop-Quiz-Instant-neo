@@ -2069,6 +2069,7 @@ content = fullText;
         action: "download",
         multiSelect: true,
         openInNewWindow: true,
+        redirectUri: window.location.origin,
         success: async (files) => {
           if (files && files.value) {
             for (const file of files.value) {
