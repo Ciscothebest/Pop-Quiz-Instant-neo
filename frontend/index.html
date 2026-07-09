@@ -2064,12 +2064,20 @@ content = fullText;
         return;
       }
 
+      showScreen('loading');
+      const token = await getOneDriveToken();
+      showScreen('library');
+
       const odOptions = {
         clientId: config.onedriveClientId,
         action: "download",
         multiSelect: true,
         openInNewWindow: true,
         redirectUri: window.location.origin,
+        advanced: {
+          accessToken: token,
+          endpointHint: "https://graph.microsoft.com/v1.0/"
+        },
         success: async (files) => {
           if (files && files.value) {
             for (const file of files.value) {
@@ -2131,6 +2139,7 @@ content = fullText;
 
       OneDrive.open(odOptions);
     } catch (e) {
+      showScreen('library');
       showCustomAlert('Error', e.message);
     }
   }
