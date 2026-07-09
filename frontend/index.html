@@ -2509,10 +2509,25 @@
       throw new Error('Metadatos de archivo de la nube inválidos.');
     }
 
-    // Inicializar barra de progreso
-    els.uploadProgressBar.style.width = '0%';
-    els.uploadProgressPercentage.textContent = '0%';
-    els.uploadProgressContainer.classList.remove('hidden');
+    const inlineBarExists = document.getElementById('previewProgressBar') !== null;
+    if (!inlineBarExists) {
+      els.uploadProgressBar.style.width = '0%';
+      els.uploadProgressPercentage.textContent = '0%';
+      els.uploadProgressContainer.classList.remove('hidden');
+    }
+
+    const updateProgress = (loaded, total) => {
+      const pct = Math.round((loaded / total) * 100);
+      const inlineBar = document.getElementById('previewProgressBar');
+      const inlinePct = document.getElementById('previewProgressPercentage');
+      if (inlineBar && inlinePct) {
+        inlineBar.style.width = `${pct}%`;
+        inlinePct.textContent = `${pct}%`;
+      } else {
+        els.uploadProgressBar.style.width = `${pct}%`;
+        els.uploadProgressPercentage.textContent = `${pct}%`;
+      }
+    };
 
     let blob;
     let isPdf = file.media_type === 'application/pdf' || (meta.mimeType && meta.mimeType === 'application/pdf');
@@ -2527,19 +2542,11 @@
           const mimeType = isPdf ? 'application/pdf' : 'text/plain';
           blob = await downloadFileWithProgress(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${mimeType}`, {
             'Authorization': `Bearer ${accessToken}`
-          }, (loaded, total) => {
-            const pct = Math.round((loaded / total) * 100);
-            els.uploadProgressBar.style.width = `${pct}%`;
-            els.uploadProgressPercentage.textContent = `${pct}%`;
-          });
+          }, updateProgress);
         } else {
           blob = await downloadFileWithProgress(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
             'Authorization': `Bearer ${accessToken}`
-          }, (loaded, total) => {
-            const pct = Math.round((loaded / total) * 100);
-            els.uploadProgressBar.style.width = `${pct}%`;
-            els.uploadProgressPercentage.textContent = `${pct}%`;
-          });
+          }, updateProgress);
         }
       } else if (meta.provider === 'onedrive') {
         const fileId = meta.fileId;
@@ -2547,11 +2554,7 @@
 
         if (meta.downloadUrl) {
           try {
-            blob = await downloadFileWithProgress(meta.downloadUrl, {}, (loaded, total) => {
-              const pct = Math.round((loaded / total) * 100);
-              els.uploadProgressBar.style.width = `${pct}%`;
-              els.uploadProgressPercentage.textContent = `${pct}%`;
-            });
+            blob = await downloadFileWithProgress(meta.downloadUrl, {}, updateProgress);
             downloadSuccess = true;
           } catch (e) {
             console.warn("Stored OneDrive URL failed, acquiring fresh one:", e);
@@ -2568,11 +2571,7 @@
           const freshUrl = data['@microsoft.graph.downloadUrl'];
           if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
 
-          blob = await downloadFileWithProgress(freshUrl, {}, (loaded, total) => {
-            const pct = Math.round((loaded / total) * 100);
-            els.uploadProgressBar.style.width = `${pct}%`;
-            els.uploadProgressPercentage.textContent = `${pct}%`;
-          });
+          blob = await downloadFileWithProgress(freshUrl, {}, updateProgress);
         }
       }
     } finally {
@@ -2606,7 +2605,6 @@
 
   async function showFilePreview(fileId) {
     try {
-      showScreen('loading');
       const res = await fetch(`/api/files/${fileId}`);
       if (!res.ok) throw new Error('No se pudo recuperar el archivo de la base de datos.');
       const file = await res.json();
@@ -2622,7 +2620,23 @@
 
       const isCloudFile = file.id.startsWith('gd_') || file.id.startsWith('od_') || (file.original_data && (file.original_data.includes('"google-drive"') || file.original_data.includes('"onedrive"')));
 
+      // Cambiar a la pantalla de vista previa de inmediato
+      showScreen('filePreview');
+
       if (isCloudFile) {
+        // Mostrar cargador en línea con barra de progreso dentro del previewContainer
+        els.previewContainer.innerHTML = `
+          <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; font-family:'Courier Prime', monospace; color:var(--ink-soft); gap: 15px;">
+            <div style="font-size:1.2rem; display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="animation: pulse 1s infinite;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
+              Descargando archivo de la nube...
+            </div>
+            <div class="progress-bar-track" style="height: 10px; background-color: var(--chalk-border, #ddd); width: 220px; margin: 0;">
+              <div class="progress-bar-fill" id="previewProgressBar" style="width: 0%; height: 100%; background: var(--pen-red, #b33a3a);"></div>
+            </div>
+            <div id="previewProgressPercentage" style="font-weight: bold; font-size: 0.95rem; font-family:'Courier Prime', monospace;">0%</div>
+          </div>
+        `;
         await showCloudFilePreview(file);
       } else {
         const isPdf = file.media_type === 'application/pdf';
@@ -2646,8 +2660,6 @@
           `;
         }
       }
-      
-      showScreen('filePreview');
     } catch(e) {
       console.error(e);
       showScreen('library');
