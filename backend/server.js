@@ -56,6 +56,36 @@ async function verifyPassword(password, storedPassword) {
   return hashBytes.toString('hex') === originalHash;
 }
 
+function encrypt(text) {
+  if (!text) return '';
+  const keyStr = process.env.ENCRYPTION_KEY || 'pop_quiz_encryption_key_32_bytes_long';
+  const key = crypto.createHash('sha256').update(String(keyStr)).digest();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+function decrypt(text) {
+  if (!text) return '';
+  try {
+    const parts = text.split(':');
+    if (parts.length !== 2) return text;
+    const iv = Buffer.from(parts[0], 'hex');
+    const encryptedText = Buffer.from(parts[1], 'hex');
+    const keyStr = process.env.ENCRYPTION_KEY || 'pop_quiz_encryption_key_32_bytes_long';
+    const key = crypto.createHash('sha256').update(String(keyStr)).digest();
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (err) {
+    console.error('Error al descifrar texto:', err);
+    return '';
+  }
+}
+
 if (cluster.isPrimary || cluster.isMaster) {
   console.log(`Proceso principal ${process.pid} corriendo.`);
 
@@ -114,6 +144,17 @@ if (cluster.isPrimary || cluster.isMaster) {
         CREATE TABLE IF NOT EXISTS users (
           username VARCHAR(255) PRIMARY KEY,
           password TEXT NOT NULL
+        )
+      `);
+
+      // Crear tabla user_cloud_configs
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_cloud_configs (
+          username VARCHAR(255) PRIMARY KEY,
+          google_client_id TEXT NOT NULL DEFAULT '',
+          google_api_key TEXT NOT NULL DEFAULT '',
+          onedrive_client_id TEXT NOT NULL DEFAULT '',
+          FOREIGN KEY(username) REFERENCES users(username) ON DELETE CASCADE
         )
       `);
 
@@ -246,6 +287,54 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Cloud config endpoints (no requireAuth here because requireAuth is applied as routing middleware later)
+app.get('/api/config/cloud', requireAuth, async (req, res) => {
+  try {
+    const config = await dbGet('SELECT * FROM user_cloud_configs WHERE username = ?', [req.username]);
+    if (!config) {
+      return res.json({
+        googleClientId: '',
+        googleApiKey: '',
+        onedriveClientId: ''
+      });
+    }
+    res.json({
+      googleClientId: decrypt(config.google_client_id),
+      googleApiKey: decrypt(config.google_api_key),
+      onedriveClientId: decrypt(config.onedrive_client_id)
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al obtener configuración de nube: ' + err.message });
+  }
+});
+
+app.post('/api/config/cloud', requireAuth, async (req, res) => {
+  const { googleClientId, googleApiKey, onedriveClientId } = req.body;
+  
+  const encGoogleClientId = encrypt(googleClientId || '');
+  const encGoogleApiKey = encrypt(googleApiKey || '');
+  const encOneDriveClientId = encrypt(onedriveClientId || '');
+  
+  try {
+    const existing = await dbGet('SELECT username FROM user_cloud_configs WHERE username = ?', [req.username]);
+    if (existing) {
+      await dbRun(`
+        UPDATE user_cloud_configs 
+        SET google_client_id = ?, google_api_key = ?, onedrive_client_id = ?
+        WHERE username = ?
+      `, [encGoogleClientId, encGoogleApiKey, encOneDriveClientId, req.username]);
+    } else {
+      await dbRun(`
+        INSERT INTO user_cloud_configs (username, google_client_id, google_api_key, onedrive_client_id)
+        VALUES (?, ?, ?, ?)
+      `, [req.username, encGoogleClientId, encGoogleApiKey, encOneDriveClientId]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al guardar configuración de nube: ' + err.message });
+  }
+});
+
 
 // Authentication Middleware to isolate data by user
 const requireAuth = (req, res, next) => {
@@ -260,6 +349,7 @@ const requireAuth = (req, res, next) => {
 app.use('/api/groups', requireAuth);
 app.use('/api/exams', requireAuth);
 app.use('/api/files', requireAuth);
+app.use('/api/config/cloud', requireAuth);
 
 
 // Groups CRUD (Soft Delete supported)

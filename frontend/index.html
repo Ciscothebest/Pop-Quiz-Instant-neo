@@ -14,6 +14,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <!-- html2pdf.js for exporting exams to PDF client-side -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- Google Identity Services & Google APIs for Google Drive Picker -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<!-- OneDrive SDK & MSAL.js for Microsoft Account integration -->
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+<script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
 <style>
   :root{
     --chalk-green: #2b4735;
@@ -934,10 +940,23 @@
       <label style="margin-top: 14px; margin-bottom: 6px;">Archivos seleccionados para el examen:</label>
       <div id="selectedFilesList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;"></div>
 
-      <label for="fileInput">Agregar nuevos archivos a la biblioteca</label>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 14px; margin-bottom: 6px;">
+        <label style="margin:0;">Agregar nuevos archivos a la biblioteca</label>
+        <button type="button" class="btn-secondary btn-cloud-settings" id="btnCloudSettingsFromConfig" style="margin:0; padding: 4px 8px; font-size:0.75rem; display:flex; align-items:center; gap:4px; height:auto; width:auto;">⚙️ Cuentas de Nube</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+        <button type="button" class="btn-secondary" id="btnGoogleDriveFromConfig" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.47 15.06L14.37 6.22C14.07 5.7 13.56 5.37 13 5.37H11C10.44 5.37 9.93 5.7 9.63 6.22L4.53 15.06C4.23 15.58 4.23 16.22 4.53 16.74L5.53 18.47C5.83 18.99 6.34 19.32 6.9 19.32H17.1C17.66 19.32 18.17 18.99 18.47 18.47L19.47 16.74C19.77 16.22 19.77 15.58 19.47 15.06M12.52 15.54H8.48L10.5 12.02L12.52 15.54M14.54 12.02L12.52 8.5H16.56L14.54 12.02Z"/></svg>
+          Google Drive
+        </button>
+        <button type="button" class="btn-secondary" id="btnOneDriveFromConfig" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
+          OneDrive
+        </button>
+      </div>
       <div class="file-drop" id="fileDrop">
         <input type="file" id="fileInput" multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.xls,.xlsx,.pptx">
-        <span class="file-drop-label"><b>Haz clic para subir</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
+        <span class="file-drop-label"><b>Subir desde mi PC</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
       </div>
       <p class="hint">Si subes archivos, se guardarán en tu biblioteca y se seleccionarán automáticamente para este examen.</p>
  
@@ -1067,10 +1086,23 @@
         <button class="btn-secondary" id="btnBackToHomeFromLibrary" style="margin-top:0; width:auto;">← Volver</button>
       </div>
       
-      <label for="libFileInput">Subir archivos a la biblioteca</label>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 14px; margin-bottom: 6px;">
+        <label style="margin:0;">Subir archivos a la biblioteca</label>
+        <button type="button" class="btn-secondary btn-cloud-settings" id="btnCloudSettingsFromLib" style="margin:0; padding: 4px 8px; font-size:0.75rem; display:flex; align-items:center; gap:4px; height:auto; width:auto;">⚙️ Cuentas de Nube</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+        <button type="button" class="btn-secondary" id="btnGoogleDriveFromLib" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.47 15.06L14.37 6.22C14.07 5.7 13.56 5.37 13 5.37H11C10.44 5.37 9.93 5.7 9.63 6.22L4.53 15.06C4.23 15.58 4.23 16.22 4.53 16.74L5.53 18.47C5.83 18.99 6.34 19.32 6.9 19.32H17.1C17.66 19.32 18.17 18.99 18.47 18.47L19.47 16.74C19.77 16.22 19.77 15.58 19.47 15.06M12.52 15.54H8.48L10.5 12.02L12.52 15.54M14.54 12.02L12.52 8.5H16.56L14.54 12.02Z"/></svg>
+          Google Drive
+        </button>
+        <button type="button" class="btn-secondary" id="btnOneDriveFromLib" style="margin:0; padding: 10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
+          OneDrive
+        </button>
+      </div>
       <div class="file-drop" id="libFileDrop" style="margin-bottom: 20px;">
         <input type="file" id="libFileInput" multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.xls,.xlsx,.pptx">
-        <span class="file-drop-label"><b>Haz clic para subir</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
+        <span class="file-drop-label"><b>Subir desde mi PC</b> o arrastra tus archivos aquí<br>PDF, TXT, MD, CSV, JSON, DOCX, XLSX, XLS o PPTX</span>
       </div>
       
       <label for="librarySearchInput" style="margin-top: 20px; margin-bottom: 6px;">Buscar en mis archivos</label>
@@ -1123,6 +1155,36 @@
  
 </div>
  
+<!-- CLOUD CONFIG MODAL -->
+<div class="modal-overlay hidden" id="cloudConfigModalOverlay" style="z-index: 1050;">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cloudConfigModalTitle" style="max-width: 440px;">
+    <h3 id="cloudConfigModalTitle">⚙️ Cuentas de Nube</h3>
+    <p style="color: var(--ink-soft); font-size: 0.88rem; line-height: 1.4; margin-bottom: 16px; font-family: 'Inter', sans-serif;">
+      Configura tus credenciales para conectar Google Drive y OneDrive de forma local. Tus datos se guardan de forma segura cifrados en tu cuenta.
+    </p>
+    
+    <div style="margin-bottom: 12px;">
+      <h4 style="margin: 0 0 6px; font-size: 0.95rem; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink);">Google Drive</h4>
+      <label for="cfgGoogleClientId" style="margin-top: 4px; font-size: 0.72rem;">Client ID de Google</label>
+      <input type="text" id="cfgGoogleClientId" placeholder="Tu Client ID de Google (.apps.googleusercontent.com)">
+      
+      <label for="cfgGoogleApiKey" style="margin-top: 8px; font-size: 0.72rem;">API Key de Google</label>
+      <input type="text" id="cfgGoogleApiKey" placeholder="Tu API Key de Google (con Picker API habilitada)">
+    </div>
+    
+    <div style="margin-top: 16px; margin-bottom: 12px; border-top: 1px dashed var(--paper-line); padding-top: 16px;">
+      <h4 style="margin: 0 0 6px; font-size: 0.95rem; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink);">OneDrive</h4>
+      <label for="cfgOneDriveClientId" style="margin-top: 4px; font-size: 0.72rem;">Client ID de OneDrive / Azure</label>
+      <input type="text" id="cfgOneDriveClientId" placeholder="Tu Application (client) ID de Microsoft Entra">
+    </div>
+
+    <div class="modal-actions" style="margin-top: 24px;">
+      <button class="btn-secondary" id="btnCloudConfigCancel" style="margin-top:0; padding: 8px 16px;">Cancelar</button>
+      <button class="btn-primary" id="btnCloudConfigSave" style="margin-top:0; width:auto; padding: 8px 16px;">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- GROUP MODAL -->
 <div class="modal-overlay hidden" id="modalOverlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle">
@@ -1316,6 +1378,12 @@
     confirmModalText: document.getElementById('confirmModalText'),
     btnConfirmCancel: document.getElementById('btnConfirmCancel'),
     btnConfirmAccept: document.getElementById('btnConfirmAccept'),
+    cloudConfigModalOverlay: document.getElementById('cloudConfigModalOverlay'),
+    cfgGoogleClientId: document.getElementById('cfgGoogleClientId'),
+    cfgGoogleApiKey: document.getElementById('cfgGoogleApiKey'),
+    cfgOneDriveClientId: document.getElementById('cfgOneDriveClientId'),
+    btnCloudConfigCancel: document.getElementById('btnCloudConfigCancel'),
+    btnCloudConfigSave: document.getElementById('btnCloudConfigSave'),
   };
  
   const state = {
@@ -1332,7 +1400,10 @@
     activePreviewFileId: null,
     configReferrer: 'history',
     libraryReferrer: 'history',
-    difficulty: 'normal'
+    difficulty: 'normal',
+    cloudConfig: { googleClientId: '', googleApiKey: '', onedriveClientId: '' },
+    googleAccessToken: null,
+    onedriveAccessToken: null
   };
  
   const TEXT_EXTENSIONS = ['.txt','.md','.csv','.json'];
@@ -1801,6 +1872,94 @@ content = fullText;
 
   let currentPreviewUrl = null;
 
+  async function showCloudFilePreview(file) {
+    let meta;
+    try {
+      meta = JSON.parse(file.original_data);
+    } catch (e) {
+      throw new Error('Metadatos de archivo de la nube inválidos.');
+    }
+
+    let blob;
+    let isPdf = file.media_type === 'application/pdf' || (meta.mimeType && meta.mimeType === 'application/pdf');
+
+    if (meta.provider === 'google-drive') {
+      const accessToken = await getValidGoogleToken();
+      const fileId = meta.fileId;
+      const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
+
+      if (isGoogleDoc) {
+        // Exporte de archivos Google Workspace como PDF o Texto Plano
+        const mimeType = isPdf ? 'application/pdf' : 'text/plain';
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${mimeType}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!res.ok) throw new Error('Error al exportar de Google Drive');
+        blob = await res.blob();
+      } else {
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!res.ok) throw new Error('Error al descargar de Google Drive');
+        blob = await res.blob();
+      }
+    } else if (meta.provider === 'onedrive') {
+      const fileId = meta.fileId;
+      let downloadSuccess = false;
+
+      if (meta.downloadUrl) {
+        try {
+          const res = await fetch(meta.downloadUrl);
+          if (res.ok) {
+            blob = await res.blob();
+            downloadSuccess = true;
+          }
+        } catch (e) {
+          console.warn("Stored OneDrive URL failed, acquiring fresh one:", e);
+        }
+      }
+
+      if (!downloadSuccess) {
+        const token = await getOneDriveToken();
+        const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Error al obtener metadatos de OneDrive');
+        const data = await res.json();
+        const freshUrl = data['@microsoft.graph.downloadUrl'];
+        if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
+
+        const fileRes = await fetch(freshUrl);
+        if (!fileRes.ok) throw new Error('Error al descargar de OneDrive');
+        blob = await fileRes.blob();
+      }
+    }
+
+    if (isPdf || (blob && blob.type === 'application/pdf')) {
+      currentPreviewUrl = URL.createObjectURL(blob);
+      els.previewContainer.innerHTML = `<iframe src="${currentPreviewUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+    } else if (blob) {
+      const isDocx = file.name.endsWith('.docx');
+      const isXlsx = file.name.endsWith('.xlsx');
+      const isPptx = file.name.endsWith('.pptx');
+      
+      let textContent = '';
+      if (isDocx || isXlsx || isPptx) {
+        const parsedFile = new File([blob], file.name, { type: blob.type });
+        const parsed = await extractTextFromFile(parsedFile);
+        textContent = parsed.content;
+      } else {
+        textContent = await blob.text();
+      }
+      
+      els.previewContainer.innerHTML = `
+        <div style="padding: 16px; height: 100%; overflow-y: auto; font-family: 'Courier Prime', monospace; font-size: 0.9rem; white-space: pre-wrap; color: var(--ink);">
+          <pre style="margin: 0; font-family: inherit; white-space: pre-wrap;">${escapeHtml(textContent)}</pre>
+        </div>
+      `;
+    }
+  }
+
   async function showFilePreview(fileId) {
     try {
       showScreen('loading');
@@ -1817,25 +1976,31 @@ content = fullText;
         currentPreviewUrl = null;
       }
 
-      const isPdf = file.media_type === 'application/pdf';
-      if (isPdf) {
-        // Render exact original PDF inside an iframe
-        const binaryString = atob(file.original_data);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes.buffer], { type: 'application/pdf' });
-        currentPreviewUrl = URL.createObjectURL(blob);
-        els.previewContainer.innerHTML = `<iframe src="${currentPreviewUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+      const isCloudFile = file.id.startsWith('gd_') || file.id.startsWith('od_') || (file.original_data && (file.original_data.includes('"google-drive"') || file.original_data.includes('"onedrive"')));
+
+      if (isCloudFile) {
+        await showCloudFilePreview(file);
       } else {
-        // Render text formatted content inside a padded scroll box
-        els.previewContainer.innerHTML = `
-          <div style="padding: 16px; height: 100%; overflow-y: auto; font-family: 'Courier Prime', monospace; font-size: 0.9rem; white-space: pre-wrap; color: var(--ink);">
-            <pre style="margin: 0; font-family: inherit; white-space: pre-wrap;">${escapeHtml(file.content)}</pre>
-          </div>
-        `;
+        const isPdf = file.media_type === 'application/pdf';
+        if (isPdf) {
+          // Render exact original PDF inside an iframe
+          const binaryString = atob(file.original_data);
+          const len = binaryString.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes.buffer], { type: 'application/pdf' });
+          currentPreviewUrl = URL.createObjectURL(blob);
+          els.previewContainer.innerHTML = `<iframe src="${currentPreviewUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+        } else {
+          // Render text formatted content inside a padded scroll box
+          els.previewContainer.innerHTML = `
+            <div style="padding: 16px; height: 100%; overflow-y: auto; font-family: 'Courier Prime', monospace; font-size: 0.9rem; white-space: pre-wrap; color: var(--ink);">
+              <pre style="margin: 0; font-family: inherit; white-space: pre-wrap;">${escapeHtml(file.content)}</pre>
+            </div>
+          `;
+        }
       }
       
       showScreen('filePreview');
@@ -1870,8 +2035,60 @@ content = fullText;
       const res = await fetch(`/api/files/${state.activePreviewFileId}`);
       if (!res.ok) throw new Error('Error al descargar.');
       const file = await res.json();
-      downloadBase64File(file.original_data, file.name, file.media_type);
+      
+      const isCloudFile = file.id.startsWith('gd_') || file.id.startsWith('od_') || (file.original_data && (file.original_data.includes('"google-drive"') || file.original_data.includes('"onedrive"')));
+      
+      if (isCloudFile) {
+        showScreen('loading');
+        showLoadingMessage('Descargando archivo de la nube...');
+        let meta = JSON.parse(file.original_data);
+        let blob;
+        
+        if (meta.provider === 'google-drive') {
+          const accessToken = await getValidGoogleToken();
+          const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
+          
+          if (isGoogleDoc) {
+            const resFile = await fetch(`https://www.googleapis.com/drive/v3/files/${meta.fileId}/export?mimeType=application/pdf`, {
+              headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (!resFile.ok) throw new Error('Error al descargar');
+            blob = await resFile.blob();
+            file.name += '.pdf';
+          } else {
+            const resFile = await fetch(`https://www.googleapis.com/drive/v3/files/${meta.fileId}?alt=media`, {
+              headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (!resFile.ok) throw new Error('Error al descargar');
+            blob = await resFile.blob();
+          }
+        } else if (meta.provider === 'onedrive') {
+          const token = await getOneDriveToken();
+          const resMeta = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${meta.fileId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!resMeta.ok) throw new Error('Error al descargar');
+          const data = await resMeta.json();
+          const freshUrl = data['@microsoft.graph.downloadUrl'];
+          const fileRes = await fetch(freshUrl);
+          if (!fileRes.ok) throw new Error('Error al descargar');
+          blob = await fileRes.blob();
+        }
+        
+        showScreen('filePreview');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        downloadBase64File(file.original_data, file.name, file.media_type);
+      }
     } catch(e) {
+      showScreen('filePreview');
       showCustomAlert('Error', 'Error al descargar el archivo: ' + e.message);
     }
   });
@@ -2040,7 +2257,25 @@ content = fullText;
       }
     });
 
-    const selectedFiles = state.availableFiles.filter(f => f.checked);
+    const selectedFilesRaw = state.availableFiles.filter(f => f.checked);
+    const selectedFiles = [];
+    for (const f of selectedFilesRaw) {
+      if (f.id.startsWith('gd_') || f.id.startsWith('od_')) {
+        els.loadingMsg.textContent = `Descargando archivo de la nube: ${f.name}...`;
+        try {
+          const content = await loadAndExtractCloudFile(f);
+          selectedFiles.push({
+            ...f,
+            content: content
+          });
+        } catch (e) {
+          console.error(e);
+          throw new Error(`No se pudo descargar o procesar el archivo de la nube "${f.name}": ${e.message}`);
+        }
+      } else {
+        selectedFiles.push(f);
+      }
+    }
     
     // Generar en sub-lotes paralelos de máximo 10 preguntas para no chocar con el límite de tokens de la API
     const maxBatchSize = 10;
@@ -3470,6 +3705,9 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
       state.availableFiles = [];
     }
 
+    // 4. Configuración de nube
+    await loadCloudConfig();
+
     // Mostrar badge si no hay conexión a internet física
     updateOnlineStatus();
   }
@@ -3648,6 +3886,14 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
     showScreen('library');
     renderLibraryLists();
   });
+
+  // Cloud buttons bindings
+  document.getElementById('btnCloudSettingsFromConfig').addEventListener('click', openCloudConfigModal);
+  document.getElementById('btnCloudSettingsFromLib').addEventListener('click', openCloudConfigModal);
+  document.getElementById('btnGoogleDriveFromConfig').addEventListener('click', openGooglePicker);
+  document.getElementById('btnGoogleDriveFromLib').addEventListener('click', openGooglePicker);
+  document.getElementById('btnOneDriveFromConfig').addEventListener('click', openOneDrivePicker);
+  document.getElementById('btnOneDriveFromLib').addEventListener('click', openOneDrivePicker);
   els.btnBackToHomeFromConfig.addEventListener('click', () => {
     setError(null);
     showScreen(state.configReferrer);
