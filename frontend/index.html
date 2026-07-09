@@ -2530,7 +2530,10 @@
     };
 
     let blob;
-    let isPdf = file.media_type === 'application/pdf' || (meta.mimeType && meta.mimeType === 'application/pdf');
+    const cleanName = file.name.replace(/ \(OneDrive\)$/i, '').replace(/ \(Google Drive\)$/i, '');
+    let isPdf = file.media_type === 'application/pdf' || 
+                 (meta.mimeType && meta.mimeType === 'application/pdf') ||
+                 cleanName.toLowerCase().endsWith('.pdf');
 
     try {
       if (meta.provider === 'google-drive') {
@@ -2582,9 +2585,9 @@
       currentPreviewUrl = URL.createObjectURL(blob);
       els.previewContainer.innerHTML = `<iframe src="${currentPreviewUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
     } else if (blob) {
-      const isDocx = file.name.endsWith('.docx');
-      const isXlsx = file.name.endsWith('.xlsx');
-      const isPptx = file.name.endsWith('.pptx');
+      const isDocx = cleanName.toLowerCase().endsWith('.docx');
+      const isXlsx = cleanName.toLowerCase().endsWith('.xlsx');
+      const isPptx = cleanName.toLowerCase().endsWith('.pptx');
       
       let textContent = '';
       if (isDocx || isXlsx || isPptx) {
@@ -2639,7 +2642,8 @@
         `;
         await showCloudFilePreview(file);
       } else {
-        const isPdf = file.media_type === 'application/pdf';
+        const cleanName = file.name.replace(/ \(OneDrive\)$/i, '').replace(/ \(Google Drive\)$/i, '');
+        const isPdf = file.media_type === 'application/pdf' || cleanName.toLowerCase().endsWith('.pdf');
         if (isPdf) {
           // Render exact original PDF inside an iframe
           const binaryString = atob(file.original_data);
