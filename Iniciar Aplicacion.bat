@@ -3,16 +3,15 @@ title Lanzador - Generador de Examenes IA
 echo ===================================================
 echo   Iniciando Servidor de Generador de Examenes IA
 echo ===================================================
-echo.
+echo:
 
 :: Cambiar al directorio del backend
 cd /d "%~dp0\backend"
 
 :: Verificar si la carpeta node_modules o sqlite3 existe, si no, instalar dependencias
 if not exist "node_modules\sqlite3" (
-  echo Detectadas nuevas dependencias (SQLite). Instalando paquetes...
+  echo Detectadas nuevas dependencias de SQLite. Instalando paquetes...
   call npm install
-  echo.
 )
 
 :: Iniciar el servidor de Node en una ventana nueva
@@ -26,9 +25,9 @@ timeout /t 2 >nul
 echo Abriendo aplicacion en el navegador...
 start http://localhost:3000
 
-echo.
+echo:
 echo ¡Listo! El servidor esta corriendo de fondo en la otra ventana.
 echo Puedes minimizar la ventana del servidor, pero no la cierres mientras usas la aplicacion.
-echo.
+echo:
 pause
 exit
