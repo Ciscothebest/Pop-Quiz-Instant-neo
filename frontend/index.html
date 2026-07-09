@@ -2537,11 +2537,15 @@
       }
     };
 
-    let blob;
     const cleanName = file.name.replace(/ \(OneDrive\)$/i, '').replace(/ \(Google Drive\)$/i, '');
-    let isPdf = file.media_type === 'application/pdf' || 
+    const cleanNameLower = cleanName.toLowerCase();
+    const isPdf = file.media_type === 'application/pdf' || 
                  (meta.mimeType && meta.mimeType === 'application/pdf') ||
-                 cleanName.toLowerCase().endsWith('.pdf');
+                 cleanNameLower.endsWith('.pdf');
+    const isWord = cleanNameLower.endsWith('.docx') || cleanNameLower.endsWith('.doc');
+    const isExcel = cleanNameLower.endsWith('.xlsx') || cleanNameLower.endsWith('.xls');
+    const isPpt = cleanNameLower.endsWith('.pptx') || cleanNameLower.endsWith('.ppt');
+    const isOfficeDoc = isWord || isExcel || isPpt;
 
     try {
       if (meta.provider === 'google-drive') {
@@ -2550,73 +2554,72 @@
         const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
 
         if (isGoogleDoc) {
-          const mimeType = isPdf ? 'application/pdf' : 'text/plain';
-          blob = await downloadFileWithProgress(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${mimeType}`, {
-            'Authorization': `Bearer ${accessToken}`
-          }, updateProgress);
+          // Documentos nativos de Google Workspace
+          let embedUrl = '';
+          if (meta.mimeType === 'application/vnd.google-apps.document') {
+            embedUrl = `https://docs.google.com/document/d/${fileId}/preview`;
+          } else if (meta.mimeType === 'application/vnd.google-apps.spreadsheet') {
+            embedUrl = `https://docs.google.com/spreadsheets/d/${fileId}/preview`;
+          } else if (meta.mimeType === 'application/vnd.google-apps.presentation') {
+            embedUrl = `https://docs.google.com/presentation/d/${fileId}/preview`;
+          } else {
+            embedUrl = `https://docs.google.com/file/d/${fileId}/preview`;
+          }
+          els.previewContainer.innerHTML = `<iframe src="${embedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+          return;
+        } else if (isPdf) {
+          const mediaUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&access_token=${accessToken}`;
+          els.previewContainer.innerHTML = `<iframe src="${mediaUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+          return;
         } else {
-          blob = await downloadFileWithProgress(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-            'Authorization': `Bearer ${accessToken}`
-          }, updateProgress);
+          // Archivos binarios Office subidos a Google Drive
+          const embedUrl = `https://docs.google.com/file/d/${fileId}/preview`;
+          els.previewContainer.innerHTML = `<iframe src="${embedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+          return;
         }
       } else if (meta.provider === 'onedrive') {
         const fileId = meta.fileId;
-        let downloadSuccess = false;
+        let freshUrl = meta.downloadUrl || null;
+        
+        // Obtener metadatos frescos de OneDrive para garantizar el funcionamiento del token y los enlaces temporales
+        const token = await getOneDriveToken();
+        const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Error al obtener metadatos de OneDrive');
+        const data = await res.json();
+        freshUrl = data['@microsoft.graph.downloadUrl'];
+        if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
 
-        if (meta.downloadUrl) {
-          try {
-            blob = await downloadFileWithProgress(meta.downloadUrl, {}, updateProgress);
-            downloadSuccess = true;
-          } catch (e) {
-            console.warn("Stored OneDrive URL failed, acquiring fresh one:", e);
-          }
+        // Actualizar el botón de abrir en la nube por si acaso
+        if (data.webUrl) {
+          els.btnOpenInCloud.style.display = 'inline-block';
+          els.btnOpenInCloud.textContent = '☁️ Abrir en OneDrive';
+          els.btnOpenInCloud.onclick = () => window.open(data.webUrl, '_blank');
         }
 
-        if (!downloadSuccess) {
-          const token = await getOneDriveToken();
-          const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (!res.ok) throw new Error('Error al obtener metadatos de OneDrive');
-          const data = await res.json();
-          const freshUrl = data['@microsoft.graph.downloadUrl'];
-          if (!freshUrl) throw new Error('No se pudo obtener URL de descarga de OneDrive');
-
-          if (data.webUrl) {
-            els.btnOpenInCloud.style.display = 'inline-block';
-            els.btnOpenInCloud.textContent = '☁️ Abrir en OneDrive';
-            els.btnOpenInCloud.onclick = () => window.open(data.webUrl, '_blank');
-          }
-
-          blob = await downloadFileWithProgress(freshUrl, {}, updateProgress);
+        if (isPdf) {
+          els.previewContainer.innerHTML = `<iframe src="${freshUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+          return;
+        } else if (isOfficeDoc) {
+          // Usar el visor interactivo de Office Apps Live embebido para Word, Excel y PowerPoint
+          const embedUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(freshUrl)}`;
+          els.previewContainer.innerHTML = `<iframe src="${embedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+          return;
+        } else {
+          // Descargar texto plano (.txt, .json, .csv) y renderizarlo en local
+          const blob = await downloadFileWithProgress(freshUrl, {}, updateProgress);
+          const textContent = await blob.text();
+          els.previewContainer.innerHTML = `
+            <div style="padding: 16px; height: 100%; overflow-y: auto; font-family: 'Courier Prime', monospace; font-size: 0.9rem; white-space: pre-wrap; color: var(--ink);">
+              <pre style="margin: 0; font-family: inherit; white-space: pre-wrap;">${escapeHtml(textContent)}</pre>
+            </div>
+          `;
+          return;
         }
       }
     } finally {
       els.uploadProgressContainer.classList.add('hidden');
-    }
-
-    if (isPdf || (blob && blob.type === 'application/pdf')) {
-      currentPreviewUrl = URL.createObjectURL(blob);
-      els.previewContainer.innerHTML = `<iframe src="${currentPreviewUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
-    } else if (blob) {
-      const isDocx = cleanName.toLowerCase().endsWith('.docx');
-      const isXlsx = cleanName.toLowerCase().endsWith('.xlsx');
-      const isPptx = cleanName.toLowerCase().endsWith('.pptx');
-      
-      let textContent = '';
-      if (isDocx || isXlsx || isPptx) {
-        const parsedFile = new File([blob], file.name, { type: blob.type });
-        const parsed = await extractTextFromFile(parsedFile);
-        textContent = parsed.content;
-      } else {
-        textContent = await blob.text();
-      }
-      
-      els.previewContainer.innerHTML = `
-        <div style="padding: 16px; height: 100%; overflow-y: auto; font-family: 'Courier Prime', monospace; font-size: 0.9rem; white-space: pre-wrap; color: var(--ink);">
-          <pre style="margin: 0; font-family: inherit; white-space: pre-wrap;">${escapeHtml(textContent)}</pre>
-        </div>
-      `;
     }
   }
 
