@@ -2070,6 +2070,9 @@ content = fullText;
         multiSelect: true,
         openInNewWindow: true,
         redirectUri: window.location.origin,
+        advanced: {
+          endpointHint: "api.onedrive.com"
+        },
         success: async (files) => {
           if (files && files.value) {
             for (const file of files.value) {
