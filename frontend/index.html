@@ -1301,6 +1301,15 @@
       screens[name].classList.remove('hidden');
     }
   }
+
+  function getCurrentScreen(){
+    for (const [name, el] of Object.entries(screens)) {
+      if (el && !el.classList.contains('hidden')) {
+        return name;
+      }
+    }
+    return 'config';
+  }
  
   const els = {
     authUsername: document.getElementById('authUsername'),
@@ -2321,17 +2330,18 @@
       }
 
       // Obtener el token de OneDrive para el usuario actual de forma segura
+      const previousScreen = getCurrentScreen();
       els.loadingMsg.textContent = 'Autenticando con OneDrive...';
       showScreen('loading');
       let oneDriveToken;
       try {
         oneDriveToken = await getOneDriveToken();
+        showScreen(previousScreen); // Volver a la pantalla anterior
       } catch (authErr) {
         console.error("Error de autenticación para Picker:", authErr);
-        await showCustomAlert('Autenticación Fallida', authErr.message);
+        showScreen(previousScreen); // Mantener en la pantalla anterior
+        await showCustomAlert('Autenticación no completada', 'Autenticación de OneDrive no completada');
         return;
-      } finally {
-        showScreen('library');
       }
 
       if (!oneDriveToken) return;
@@ -2719,6 +2729,20 @@
 
       const isCloudFile = file.id.startsWith('gd_') || file.id.startsWith('od_') || (file.original_data && (file.original_data.includes('"google-drive"') || file.original_data.includes('"onedrive"')));
 
+      if (isCloudFile) {
+        if (file.id.startsWith('od_') || (file.original_data && file.original_data.includes('"onedrive"'))) {
+          const previousScreen = getCurrentScreen();
+          try {
+            await getOneDriveToken();
+          } catch (authErr) {
+            console.error("Error de autenticación para Vista Previa:", authErr);
+            // No cambiamos de pantalla, mantenemos al usuario donde está!
+            await showCustomAlert('Autenticación no completada', 'Autenticación de OneDrive no completada');
+            return;
+          }
+        }
+      }
+
       // Cambiar a la pantalla de vista previa de inmediato
       showScreen('filePreview');
 
@@ -2793,51 +2817,62 @@
       const isCloudFile = file.id.startsWith('gd_') || file.id.startsWith('od_') || (file.original_data && (file.original_data.includes('"google-drive"') || file.original_data.includes('"onedrive"')));
       
       if (isCloudFile) {
+        const previousScreen = getCurrentScreen();
         showScreen('loading');
         showLoadingMessage('Descargando archivo de la nube...');
         let meta = JSON.parse(file.original_data);
         let blob;
         
-        if (meta.provider === 'google-drive') {
-          const accessToken = await getValidGoogleToken();
-          const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
-          
-          if (isGoogleDoc) {
-            const resFile = await fetch(`https://www.googleapis.com/drive/v3/files/${meta.fileId}/export?mimeType=application/pdf`, {
-              headers: { 'Authorization': `Bearer ${accessToken}` }
+        try {
+          if (meta.provider === 'google-drive') {
+            const accessToken = await getValidGoogleToken();
+            const isGoogleDoc = meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps.');
+            
+            if (isGoogleDoc) {
+              const resFile = await fetch(`https://www.googleapis.com/drive/v3/files/${meta.fileId}/export?mimeType=application/pdf`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+              });
+              if (!resFile.ok) throw new Error('Error al descargar');
+              blob = await resFile.blob();
+              file.name += '.pdf';
+            } else {
+              const resFile = await fetch(`https://www.googleapis.com/drive/v3/files/${meta.fileId}?alt=media`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+              });
+              if (!resFile.ok) throw new Error('Error al descargar');
+              blob = await resFile.blob();
+            }
+          } else if (meta.provider === 'onedrive') {
+            const token = await getOneDriveToken();
+            const resMeta = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${meta.fileId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!resFile.ok) throw new Error('Error al descargar');
-            blob = await resFile.blob();
-            file.name += '.pdf';
-          } else {
-            const resFile = await fetch(`https://www.googleapis.com/drive/v3/files/${meta.fileId}?alt=media`, {
-              headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (!resFile.ok) throw new Error('Error al descargar');
-            blob = await resFile.blob();
+            if (!resMeta.ok) throw new Error('Error al descargar');
+            const data = await resMeta.json();
+            const freshUrl = data['@microsoft.graph.downloadUrl'];
+            const fileRes = await fetch(freshUrl);
+            if (!fileRes.ok) throw new Error('Error al descargar');
+            blob = await fileRes.blob();
           }
-        } else if (meta.provider === 'onedrive') {
-          const token = await getOneDriveToken();
-          const resMeta = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${meta.fileId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (!resMeta.ok) throw new Error('Error al descargar');
-          const data = await resMeta.json();
-          const freshUrl = data['@microsoft.graph.downloadUrl'];
-          const fileRes = await fetch(freshUrl);
-          if (!fileRes.ok) throw new Error('Error al descargar');
-          blob = await fileRes.blob();
+          
+          showScreen(previousScreen);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (downloadErr) {
+          console.error("Error al descargar archivo:", downloadErr);
+          showScreen(previousScreen); // Mantener en la pantalla previa
+          if (downloadErr.message === 'Autenticación de OneDrive no completada') {
+            await showCustomAlert('Autenticación no completada', 'Autenticación de OneDrive no completada');
+          } else {
+            await showCustomAlert('Error de descarga', 'No se pudo descargar el archivo de la nube.');
+          }
         }
-        
-        showScreen('filePreview');
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
       } else {
         downloadBase64File(file.original_data, file.name, file.media_type);
       }
