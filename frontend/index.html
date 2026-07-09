@@ -1455,11 +1455,16 @@
   }
 
   async function extractTextFromFile(file) {
-    const lowerName = file.name.toLowerCase();
-    const isPdf = lowerName.endsWith('.pdf');
-    const isDocx = lowerName.endsWith('.docx') || lowerName.endsWith('.doc');
-    const isXlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
-    const isPptx = lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt');
+    let lowerName = file.name.toLowerCase();
+    
+    // Remover sufijos de nube para detectar correctamente la extensión
+    lowerName = lowerName.replace(/\s*\(onedrive\)$/i, '')
+                         .replace(/\s*\(google drive\)$/i, '');
+                         
+    const isPdf = lowerName.endsWith('.pdf') || (file.type && file.type === 'application/pdf');
+    const isDocx = lowerName.endsWith('.docx') || lowerName.endsWith('.doc') || (file.type && (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.type === 'application/msword'));
+    const isXlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || (file.type && (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'application/vnd.ms-excel'));
+    const isPptx = lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt') || (file.type && (file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || file.type === 'application/vnd.ms-powerpoint'));
     const isText = TEXT_EXTENSIONS.some(ext => lowerName.endsWith(ext)) || (file.type && file.type.startsWith('text/') && !isPdf && !isDocx && !isXlsx && !isPptx);
 
     let content = '';
