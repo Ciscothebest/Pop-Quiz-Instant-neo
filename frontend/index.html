@@ -995,6 +995,12 @@
         </g>
       </svg>
       <p class="loading-msg" id="loadingMsg">Preparando el examen…</p>
+      <div id="uploadProgressContainer" class="hidden" style="width: 100%; max-width: 250px; margin: 15px auto 0 auto;">
+        <div class="progress-bar-track" style="height: 10px; background-color: var(--chalk-border, #ddd);">
+          <div class="progress-bar-fill" id="uploadProgressBar" style="width: 0%; height: 100%; background: var(--accent, #900);"></div>
+        </div>
+        <p id="uploadProgressPercentage" class="progress-label" style="text-align: center; margin-top: 8px; font-weight: bold;">0%</p>
+      </div>
     </div>
   </section>
  
@@ -1325,6 +1331,9 @@
     btnGenerate: document.getElementById('btnGenerate'),
     errorBox: document.getElementById('errorBox'),
     loadingMsg: document.getElementById('loadingMsg'),
+    uploadProgressContainer: document.getElementById('uploadProgressContainer'),
+    uploadProgressBar: document.getElementById('uploadProgressBar'),
+    uploadProgressPercentage: document.getElementById('uploadProgressPercentage'),
     progressLabel: document.getElementById('progressLabel'),
     progressFill: document.getElementById('progressFill'),
     timerClock: document.getElementById('timerClock'),
@@ -1636,23 +1645,42 @@
     return { content, pdfImages };
   }
 
-  async function uploadFileToOneDrive(file, token) {
+  async function uploadFileToOneDrive(file, token, onProgress) {
     const fileName = encodeURIComponent(file.name);
     // Simple PUT upload for files <= 4MB
     if (file.size <= 4 * 1024 * 1024) {
-      const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${fileName}:/content`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': file.type || 'application/octet-stream'
-        },
-        body: file
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', `https://graph.microsoft.com/v1.0/me/drive/root:/${fileName}:/content`);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable && onProgress) {
+            onProgress(e.loaded, e.total);
+          }
+        });
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (err) {
+              reject(new Error('Respuesta de OneDrive inválida'));
+            }
+          } else {
+            try {
+              const errData = JSON.parse(xhr.responseText);
+              reject(new Error(errData.error?.message || 'Error al subir a OneDrive'));
+            } catch (err) {
+              reject(new Error(`Error al subir a OneDrive (${xhr.status})`));
+            }
+          }
+        };
+        
+        xhr.onerror = () => reject(new Error('Error de red al subir a OneDrive'));
+        xhr.send(file);
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error?.message || 'Error al subir a OneDrive');
-      }
-      return await res.json();
     } else {
       // Create Upload Session for files > 4MB
       const sessionRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${fileName}:/createUploadSession`, {
@@ -1675,19 +1703,33 @@
       const sessionData = await sessionRes.json();
       const uploadUrl = sessionData.uploadUrl;
 
-      // Upload file blob directly to uploadUrl
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Length': file.size,
-          'Content-Range': `bytes 0-${file.size - 1}/${file.size}`
-        },
-        body: file
+      // Upload file blob using XHR to track progress
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Range', `bytes 0-${file.size - 1}/${file.size}`);
+        
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable && onProgress) {
+            onProgress(e.loaded, e.total);
+          }
+        });
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (err) {
+              resolve({});
+            }
+          } else {
+            reject(new Error(`Error al subir el archivo a la sesión de OneDrive (${xhr.status})`));
+          }
+        };
+        
+        xhr.onerror = () => reject(new Error('Error de red al subir el archivo a OneDrive'));
+        xhr.send(file);
       });
-      if (!uploadRes.ok) {
-        throw new Error('Error al subir el archivo a la sesión de OneDrive');
-      }
-      return await uploadRes.json();
     }
   }
 
@@ -1753,9 +1795,16 @@
 
         if (oneDriveToken) {
           els.loadingMsg.textContent = `Subiendo archivo a OneDrive: ${file.name}...`;
+          els.uploadProgressBar.style.width = '0%';
+          els.uploadProgressPercentage.textContent = '0%';
+          els.uploadProgressContainer.classList.remove('hidden');
           showScreen('loading');
           try {
-            const driveItem = await uploadFileToOneDrive(file, oneDriveToken);
+            const driveItem = await uploadFileToOneDrive(file, oneDriveToken, (loaded, total) => {
+              const pct = Math.round((loaded / total) * 100);
+              els.uploadProgressBar.style.width = `${pct}%`;
+              els.uploadProgressPercentage.textContent = `${pct}%`;
+            });
             fileId = `od_${driveItem.id}`;
             name = file.name + ' (OneDrive)';
             originalData = JSON.stringify({
@@ -1773,14 +1822,22 @@
             content = parsed.content;
             pdfImages = parsed.pdfImages;
           } finally {
+            els.uploadProgressContainer.classList.add('hidden');
             showScreen('library');
           }
         } else {
           // Subida local normal
-          originalData = await readFileAsBase64(file);
-          const parsed = await extractTextFromFile(file);
-          content = parsed.content;
-          pdfImages = parsed.pdfImages;
+          els.loadingMsg.textContent = `Procesando archivo local: ${file.name}...`;
+          els.uploadProgressContainer.classList.add('hidden');
+          showScreen('loading');
+          try {
+            originalData = await readFileAsBase64(file);
+            const parsed = await extractTextFromFile(file);
+            content = parsed.content;
+            pdfImages = parsed.pdfImages;
+          } finally {
+            showScreen('library');
+          }
         }
 
         let truncated = false;
