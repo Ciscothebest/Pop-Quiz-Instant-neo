@@ -2244,7 +2244,7 @@
 
     try {
       const loginRequest = {
-        scopes: ["Files.Read", "User.Read"]
+        scopes: ["Files.ReadWrite", "Files.Read", "User.Read"]
       };
       const response = await msalInstance.loginPopup(loginRequest);
       state.onedriveAccessToken = response.accessToken;
