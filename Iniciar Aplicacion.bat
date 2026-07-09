@@ -8,6 +8,13 @@ echo.
 :: Cambiar al directorio del backend
 cd /d "%~dp0\backend"
 
+:: Verificar si la carpeta node_modules o sqlite3 existe, si no, instalar dependencias
+if not exist "node_modules\sqlite3" (
+  echo Detectadas nuevas dependencias (SQLite). Instalando paquetes...
+  call npm install
+  echo.
+)
+
 :: Iniciar el servidor de Node en una ventana nueva
 start "Servidor Generador Examenes IA" cmd /k "node server.js"
 
