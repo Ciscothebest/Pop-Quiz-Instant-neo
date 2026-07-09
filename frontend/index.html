@@ -2116,7 +2116,16 @@ content = fullText;
           console.log("OneDrive picker cancelado.");
         },
         error: (err) => {
-          showCustomAlert('Error de OneDrive', err);
+          console.error("OneDrive Picker Error details:", err);
+          let errorMsg = 'Error';
+          if (Array.isArray(err) && err.length > 0) {
+            errorMsg = typeof err[0] === 'object' ? JSON.stringify(err[0]) : String(err[0]);
+          } else if (err && typeof err === 'object') {
+            errorMsg = err.message || JSON.stringify(err);
+          } else if (err) {
+            errorMsg = String(err);
+          }
+          showCustomAlert('Error de OneDrive', errorMsg);
         }
       };
 
