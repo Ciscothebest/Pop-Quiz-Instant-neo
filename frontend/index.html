@@ -2064,20 +2064,12 @@ content = fullText;
         return;
       }
 
-      showScreen('loading');
-      const token = await getOneDriveToken();
-      showScreen('library');
-
       const odOptions = {
         clientId: config.onedriveClientId,
         action: "download",
         multiSelect: true,
         openInNewWindow: true,
         redirectUri: window.location.origin,
-        advanced: {
-          accessToken: token,
-          endpointHint: "https://graph.microsoft.com/v1.0/"
-        },
         success: async (files) => {
           if (files && files.value) {
             for (const file of files.value) {
@@ -4534,30 +4526,8 @@ Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código markdown
     });
   }
 
-  // Manejo de respuesta de redirección de MSAL (requerido para procesar popups y cerrarlos correctamente)
-  async function handleMsalRedirect() {
-    try {
-      await loadCloudConfig();
-      const config = state.cloudConfig || {};
-      if (config.onedriveClientId) {
-        const msalConfig = {
-          auth: {
-            clientId: config.onedriveClientId,
-            authority: "https://login.microsoftonline.com/common",
-            redirectUri: window.location.origin
-          }
-        };
-        const msalInstance = new msal.PublicClientApplication(msalConfig);
-        await msalInstance.initialize();
-        await msalInstance.handleRedirectPromise();
-      }
-    } catch (e) {
-      console.warn("Error al inicializar/procesar redirección de MSAL:", e);
-    }
-  }
-
   // Check auth session on load
-  handleMsalRedirect().then(() => {
+  loadCloudConfig().then(() => {
     checkSession();
   });
 
