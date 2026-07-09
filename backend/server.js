@@ -452,17 +452,15 @@ app.use('/api/config/cloud', requireAuth);
 app.get('/api/config/cloud', async (req, res) => {
   try {
     const config = await dbGet('SELECT * FROM user_cloud_configs WHERE username = ?', [req.username]);
-    if (!config) {
-      return res.json({
-        googleClientId: '',
-        googleApiKey: '',
-        onedriveClientId: ''
-      });
-    }
+    
+    const googleClientId = (config && config.google_client_id) ? decrypt(config.google_client_id) : (process.env.GOOGLE_CLIENT_ID || '');
+    const googleApiKey = (config && config.google_api_key) ? decrypt(config.google_api_key) : (process.env.GOOGLE_API_KEY || '');
+    const onedriveClientId = (config && config.onedrive_client_id) ? decrypt(config.onedrive_client_id) : (process.env.ONEDRIVE_CLIENT_ID || '');
+
     res.json({
-      googleClientId: decrypt(config.google_client_id),
-      googleApiKey: decrypt(config.google_api_key),
-      onedriveClientId: decrypt(config.onedrive_client_id)
+      googleClientId,
+      googleApiKey,
+      onedriveClientId
     });
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener configuración de nube: ' + err.message });
